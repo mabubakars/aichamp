@@ -1,0 +1,139 @@
+.sessions-panel {
+  width: 250px;
+  background-color: #f8f9fa;
+  padding: 15px;
+  height: calc(100vh - 60px);
+  margin-top: 60px;
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.1);
+  position: fixed;
+  top: 0;
+  left: 0;
+  overflow-y: auto;
+}
+
+.sessions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.sessions-header h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.new-session-btn {
+  background-color: #4a7bff;
+  border: none;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px; 
+}
+
+.session-item {
+  padding: 8px 10px;   
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+  position: relative;  
+}
+
+.session-item:hover {
+  background-color: #e6ebff;
+}
+
+.session-item.active {
+  background: #b5cff8;
+  border-left: 4px solid #4A90E2;
+}
+
+.session-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.session-name {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.session-menu-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 14px;
+}
+
+/* ---------- MENU ---------- */
+.session-menu {
+  position: absolute;
+  top: 32px;
+  right: 8px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 0;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+  z-index: 999;
+  width: 140px;
+}
+
+.session-menu button {
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.session-menu button:hover {
+  background: #f1f3f5;
+}
+
+.session-menu .delete-btn {
+  color: red;
+}
+
+.session-edit-input {
+  width: 100%;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  outline: none;
+}
+
+.session-edit-input:focus {
+  border-color: #4a90e2;
+}
+
+.session-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-date {
+  font-size: 11px;
+  color: #9aa0a6;
+  margin-top: 2px;
+}
+
+@media (max-width: 1024px) {
+  .sessions-panel {
+    display: none;
+  }
+}
