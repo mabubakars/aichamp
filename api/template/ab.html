@@ -1,0 +1,1772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScholarCompare | AI Model Comparator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Source+Serif+Pro:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --navy: #1a2b4c;
+            --dark-navy: #0f1a30;
+            --light-navy: #2c3e6e;
+            --accent: #4a7bff;
+            --light-accent: #e8eeff;
+            --light-gray: #f8f9fa;
+            --medium-gray: #e9ecef;
+            --dark-gray: #6c757d;
+            --text: #212529;
+            --white: #ffffff;
+            --success: #28a745;
+            --border-radius: 8px;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text);
+            background-color: var(--light-gray);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header Styles */
+        header {
+            background-color: var(--navy);
+            color: var(--white);
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            font-size: 1.5rem;
+            color: var(--accent);
+        }
+
+        .logo-text {
+            font-family: 'Source Serif Pro', serif;
+            font-weight: 600;
+            font-size: 1.4rem;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-subtitle {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            margin-top: 2px;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: none;
+            color: var(--white);
+            font-size: 1.1rem;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: var(--transition);
+        }
+
+        .theme-toggle:hover {
+            opacity: 1;
+        }
+
+        .user-profile {
+            position: relative;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .profile-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: var(--light-navy);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+
+        .profile-icon:hover {
+            background-color: var(--accent);
+        }
+
+        .profile-menu {
+            position: absolute;
+            top: 45px;
+            right: 0;
+            background-color: var(--white);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            width: 200px;
+            display: none;
+            z-index: 100;
+            overflow: hidden;
+        }
+
+        .profile-menu.active {
+            display: block;
+        }
+
+        .profile-menu ul {
+            list-style: none;
+        }
+
+        .profile-menu li {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--medium-gray);
+            transition: var(--transition);
+        }
+
+        .profile-menu li:last-child {
+            border-bottom: none;
+        }
+
+        .profile-menu li:hover {
+            background-color: var(--light-gray);
+        }
+
+        .profile-menu a {
+            text-decoration: none;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        .profile-menu i {
+            margin-right: 0.75rem;
+            width: 18px;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        /* Main Layout */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sessions Panel */
+        .sessions-panel {
+            width: 280px;
+            background-color: var(--white);
+            border-right: 1px solid var(--medium-gray);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .sessions-header {
+            padding: 1.25rem;
+            background-color: var(--light-navy);
+            color: var(--white);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sessions-header h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .new-session-btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            padding: 0.5rem 0.9rem;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.85rem;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .new-session-btn:hover {
+            background-color: #3a6bff;
+        }
+
+        .sessions-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .session-item {
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            background-color: var(--light-gray);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+            border-left: 3px solid transparent;
+        }
+
+        .session-item:hover {
+            background-color: var(--medium-gray);
+        }
+
+        .session-item.active {
+            border-left: 3px solid var(--accent);
+            background-color: var(--light-accent);
+        }
+
+        .session-name {
+            font-weight: 500;
+            margin-bottom: 0.3rem;
+            font-size: 0.95rem;
+        }
+
+        .session-date {
+            font-size: 0.75rem;
+            color: var(--dark-gray);
+        }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Models Display */
+        .models-display {
+            flex: 1;
+            display: flex;
+            overflow-x: auto;
+            padding: 1.5rem;
+            gap: 1.5rem;
+        }
+
+        .model-container {
+            flex: 1;
+            min-width: 300px;
+            background-color: var(--white);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .model-header {
+            padding: 1rem 1.25rem;
+            background-color: var(--light-navy);
+            color: var(--white);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .model-name {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .model-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .model-version {
+            font-size: 0.75rem;
+            opacity: 0.8;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 22px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(22px);
+        }
+
+        .model-response {
+            flex: 1;
+            padding: 1.25rem;
+            overflow-y: auto;
+            line-height: 1.7;
+            font-size: 0.9rem;
+        }
+
+        .response-content {
+            max-height: 100%;
+        }
+
+        .response-title {
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--navy);
+            font-size: 0.95rem;
+        }
+
+        .response-text {
+            margin-bottom: 1rem;
+        }
+
+        .response-metrics {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--medium-gray);
+        }
+
+        .metric {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .metric-value {
+            font-weight: 600;
+            color: var(--navy);
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--dark-gray);
+        }
+
+        .placeholder-text {
+            color: var(--dark-gray);
+            font-style: italic;
+            text-align: center;
+            margin-top: 2rem;
+            font-size: 0.9rem;
+        }
+
+        /* Prompt Input */
+        .prompt-section {
+            padding: 1.25rem;
+            background-color: var(--white);
+            border-top: 1px solid var(--medium-gray);
+            position: sticky;
+            bottom: 0;
+        }
+
+        .prompt-container {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .prompt-input {
+            flex: 1;
+            min-height: 100px;
+            padding: 1rem;
+            border: 1px solid var(--medium-gray);
+            border-radius: var(--border-radius);
+            resize: vertical;
+            font-size: 0.9rem;
+            font-family: 'Inter', sans-serif;
+            transition: var(--transition);
+        }
+
+        .prompt-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(74, 123, 255, 0.2);
+        }
+
+        .submit-btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            padding: 0.8rem 1.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            height: fit-content;
+        }
+
+        .submit-btn:hover {
+            background-color: #3a6bff;
+        }
+
+        /* Auth Pages Styles */
+        .auth-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex: 1;
+            padding: 2rem;
+        }
+
+        .auth-card {
+            background-color: var(--white);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            width: 100%;
+            max-width: 450px;
+            padding: 2.5rem;
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .auth-title {
+            font-family: 'Source Serif Pro', serif;
+            font-size: 1.8rem;
+            color: var(--navy);
+            margin-bottom: 0.5rem;
+        }
+
+        .auth-subtitle {
+            color: var(--dark-gray);
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--navy);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--medium-gray);
+            border-radius: var(--border-radius);
+            font-size: 0.9rem;
+            transition: var(--transition);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(74, 123, 255, 0.2);
+        }
+
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-check-input {
+            width: 16px;
+            height: 16px;
+        }
+
+        .form-check-label {
+            font-size: 0.9rem;
+            color: var(--dark-gray);
+        }
+
+        .auth-btn {
+            width: 100%;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            padding: 0.9rem;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            margin-bottom: 1.5rem;
+        }
+
+        .auth-btn:hover {
+            background-color: #3a6bff;
+        }
+
+        .auth-footer {
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--dark-gray);
+        }
+
+        .auth-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .auth-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Profile Page Styles */
+        .profile-container {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .profile-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background-color: var(--light-navy);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            color: var(--white);
+        }
+
+        .profile-info h1 {
+            font-family: 'Source Serif Pro', serif;
+            font-size: 1.8rem;
+            color: var(--navy);
+            margin-bottom: 0.25rem;
+        }
+
+        .profile-info p {
+            color: var(--dark-gray);
+            margin-bottom: 0.5rem;
+        }
+
+        .profile-stats {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--navy);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--dark-gray);
+        }
+
+        .profile-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .profile-section {
+            background-color: var(--white);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            color: var(--navy);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--medium-gray);
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--medium-gray);
+        }
+
+        .info-item:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-weight: 500;
+            color: var(--navy);
+        }
+
+        .info-value {
+            color: var(--dark-gray);
+        }
+
+        .info-edit {
+            color: var(--accent);
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .info-edit:hover {
+            text-decoration: underline;
+        }
+
+        /* Settings Page Styles */
+        .settings-container {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .settings-header {
+            margin-bottom: 2rem;
+        }
+
+        .settings-title {
+            font-family: 'Source Serif Pro', serif;
+            font-size: 1.8rem;
+            color: var(--navy);
+            margin-bottom: 0.5rem;
+        }
+
+        .settings-subtitle {
+            color: var(--dark-gray);
+            font-size: 0.95rem;
+        }
+
+        .settings-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .settings-section {
+            background-color: var(--white);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 1.5rem;
+        }
+
+        .settings-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--medium-gray);
+        }
+
+        .settings-item:last-child {
+            border-bottom: none;
+        }
+
+        .settings-label {
+            font-weight: 500;
+            color: var(--navy);
+        }
+
+        .settings-description {
+            font-size: 0.85rem;
+            color: var(--dark-gray);
+            margin-top: 0.25rem;
+        }
+
+        .settings-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--border-radius);
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            border: none;
+        }
+
+        .btn-primary {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #3a6bff;
+        }
+
+        .btn-outline {
+            background-color: transparent;
+            border: 1px solid var(--medium-gray);
+            color: var(--text);
+        }
+
+        .btn-outline:hover {
+            background-color: var(--light-gray);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .models-display {
+                flex-wrap: wrap;
+            }
+            
+            .model-container {
+                min-width: calc(50% - 1rem);
+            }
+
+            .profile-content,
+            .settings-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+            }
+            
+            .sessions-panel {
+                width: 100%;
+                height: 200px;
+                border-right: none;
+                border-bottom: 1px solid var(--medium-gray);
+            }
+            
+            .model-container {
+                min-width: 100%;
+            }
+            
+            .prompt-container {
+                flex-direction: column;
+            }
+
+            .profile-header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .profile-stats {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            header {
+                padding: 0.8rem 1rem;
+            }
+            
+            .logo-text {
+                font-size: 1.2rem;
+            }
+            
+            .sessions-header, .model-header {
+                padding: 1rem;
+            }
+            
+            .models-display, .prompt-section {
+                padding: 1rem;
+            }
+            
+            .header-controls {
+                gap: 1rem;
+            }
+
+            .auth-card {
+                padding: 1.5rem;
+            }
+
+            .profile-container,
+            .settings-container {
+                padding: 1rem;
+            }
+        }
+
+        /* Accessibility */
+        button:focus, input:focus, textarea:focus {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--medium-gray);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--dark-gray);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--navy);
+        }
+
+        /* Page Navigation */
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="page active">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <div>
+                    <div class="logo-text">ScholarCompare</div>
+                    <div class="logo-subtitle">AI Model Comparator for Academia</div>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+        </header>
+
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h1 class="auth-title">Welcome Back</h1>
+                    <p class="auth-subtitle">Sign in to your ScholarCompare account</p>
+                </div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginEmail" class="form-label">Email Address</label>
+                        <input type="email" id="loginEmail" class="form-control" placeholder="your.email@university.edu" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword" class="form-label">Password</label>
+                        <input type="password" id="loginPassword" class="form-control" placeholder="Enter your password" required>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="rememberMe" class="form-check-input">
+                        <label for="rememberMe" class="form-check-label">Remember me</label>
+                    </div>
+                    <button type="submit" class="auth-btn">Sign In</button>
+                </form>
+                <div class="auth-footer">
+                    <p>Don't have an account? <a href="#" class="auth-link" id="goToRegister">Create account</a></p>
+                    <p><a href="#" class="auth-link">Forgot your password?</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Page -->
+    <div id="registerPage" class="page">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <div>
+                    <div class="logo-text">ScholarCompare</div>
+                    <div class="logo-subtitle">AI Model Comparator for Academia</div>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button class="theme-toggle" id="themeToggle2" aria-label="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+        </header>
+
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h1 class="auth-title">Create Account</h1>
+                    <p class="auth-subtitle">Join ScholarCompare to compare AI models for your research</p>
+                </div>
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="registerName" class="form-label">Full Name</label>
+                        <input type="text" id="registerName" class="form-control" placeholder="Dr. Jane Smith" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerEmail" class="form-label">Email Address</label>
+                        <input type="email" id="registerEmail" class="form-control" placeholder="your.email@university.edu" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerInstitution" class="form-label">Institution</label>
+                        <input type="text" id="registerInstitution" class="form-control" placeholder="University of Example" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword" class="form-label">Password</label>
+                        <input type="password" id="registerPassword" class="form-control" placeholder="Create a strong password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerConfirmPassword" class="form-label">Confirm Password</label>
+                        <input type="password" id="registerConfirmPassword" class="form-control" placeholder="Confirm your password" required>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="agreeTerms" class="form-check-input" required>
+                        <label for="agreeTerms" class="form-check-label">I agree to the <a href="#" class="auth-link">Terms of Service</a> and <a href="#" class="auth-link">Privacy Policy</a></label>
+                    </div>
+                    <button type="submit" class="auth-btn">Create Account</button>
+                </form>
+                <div class="auth-footer">
+                    <p>Already have an account? <a href="#" class="auth-link" id="goToLogin">Sign in</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Page -->
+    <div id="profilePage" class="page">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <div>
+                    <div class="logo-text">ScholarCompare</div>
+                    <div class="logo-subtitle">AI Model Comparator for Academia</div>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button class="theme-toggle" id="themeToggle3" aria-label="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <div class="user-profile" id="userProfile">
+                    <div class="profile-icon">
+                        <i class="fas fa-user-graduate"></i>
+                    </div>
+                    <div class="profile-menu" id="profileMenu">
+                        <ul>
+                            <li><a href="#" class="nav-link" data-page="profilePage"><i class="fas fa-user-circle"></i> My Profile</a></li>
+                            <li><a href="#" class="nav-link" data-page="aiPage"><i class="fas fa-brain"></i> AI Comparator</a></li>
+                            <li><a href="#" class="nav-link" data-page="settingsPage"><i class="fas fa-cog"></i> Settings</a></li>
+                            <li><a href="#"><i class="fas fa-bookmark"></i> Saved Comparisons</a></li>
+                            <li><a href="#"><i class="fas fa-history"></i> History</a></li>
+                            <li><a href="#"><i class="fas fa-question-circle"></i> Help & Support</a></li>
+                            <li><a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-container">
+            <aside class="sessions-panel">
+                <div class="sessions-header">
+                    <h2>Research Sessions</h2>
+                    <button class="new-session-btn">
+                        <i class="fas fa-plus"></i> New
+                    </button>
+                </div>
+                <div class="sessions-list">
+                    <div class="session-item active">
+                        <div class="session-name">Literature Review Analysis</div>
+                        <div class="session-date">Today, 10:24 AM</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="session-name">Research Methodology Comparison</div>
+                        <div class="session-date">Yesterday, 3:45 PM</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="session-name">Thesis Abstract Refinement</div>
+                        <div class="session-date">May 12, 2023</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="session-name">Technical Paper Analysis</div>
+                        <div class="session-date">May 10, 2023</div>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="content-area">
+                <div class="profile-container">
+                    <div class="profile-header">
+                        <div class="profile-avatar">
+                            <i class="fas fa-user-graduate"></i>
+                        </div>
+                        <div class="profile-info">
+                            <h1>Dr. Jane Smith</h1>
+                            <p>Associate Professor, Computer Science</p>
+                            <p>Stanford University</p>
+                            <div class="profile-stats">
+                                <div class="stat-item">
+                                    <div class="stat-value">42</div>
+                                    <div class="stat-label">Sessions</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value">128</div>
+                                    <div class="stat-label">Comparisons</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value">18</div>
+                                    <div class="stat-label">Saved</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="profile-content">
+                        <div class="profile-section">
+                            <h2 class="section-title">Personal Information</h2>
+                            <div class="info-item">
+                                <span class="info-label">Full Name</span>
+                                <span class="info-value">Dr. Jane Smith</span>
+                                <span class="info-edit">Edit</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Email</span>
+                                <span class="info-value">jane.smith@stanford.edu</span>
+                                <span class="info-edit">Edit</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Institution</span>
+                                <span class="info-value">Stanford University</span>
+                                <span class="info-edit">Edit</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Department</span>
+                                <span class="info-value">Computer Science</span>
+                                <span class="info-edit">Edit</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Position</span>
+                                <span class="info-value">Associate Professor</span>
+                                <span class="info-edit">Edit</span>
+                            </div>
+                        </div>
+
+                        <div class="profile-section">
+                            <h2 class="section-title">Research Interests</h2>
+                            <div class="info-item">
+                                <span class="info-label">Primary Field</span>
+                                <span class="info-value">Artificial Intelligence</span>
+                                <span class="info-edit">Edit</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Specializations</span>
+                                <span class="info-value">Machine Learning, NLP, Computer Vision</span>
+                                <span class="info-edit">Edit</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Current Projects</span>
+                                <span class="info-value">3 active projects</span>
+                                <span class="info-edit">View</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Publications</span>
+                                <span class="info-value">24 papers</span>
+                                <span class="info-edit">View</span>
+                            </div>
+                        </div>
+
+                        <div class="profile-section">
+                            <h2 class="section-title">Account Details</h2>
+                            <div class="info-item">
+                                <span class="info-label">Member Since</span>
+                                <span class="info-value">March 2022</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Subscription</span>
+                                <span class="info-value">Premium</span>
+                                <span class="info-edit">Upgrade</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">API Usage</span>
+                                <span class="info-value">42% of monthly limit</span>
+                                <span class="info-edit">Details</span>
+                            </div>
+                        </div>
+
+                        <div class="profile-section">
+                            <h2 class="section-title">Preferences</h2>
+                            <div class="info-item">
+                                <span class="info-label">Default Models</span>
+                                <span class="info-value">GPT-4, Claude, Gemini</span>
+                                <span class="info-edit">Edit</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Response Format</span>
+                                <span class="info-value">Academic</span>
+                                <span class="info-edit">Edit</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Citation Style</span>
+                                <span class="info-value">APA 7th Edition</span>
+                                <span class="info-edit">Edit</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Settings Page -->
+    <div id="settingsPage" class="page">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <div>
+                    <div class="logo-text">ScholarCompare</div>
+                    <div class="logo-subtitle">AI Model Comparator for Academia</div>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button class="theme-toggle" id="themeToggle4" aria-label="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <div class="user-profile" id="userProfile2">
+                    <div class="profile-icon">
+                        <i class="fas fa-user-graduate"></i>
+                    </div>
+                    <div class="profile-menu" id="profileMenu2">
+                        <ul>
+                            <li><a href="#" class="nav-link" data-page="profilePage"><i class="fas fa-user-circle"></i> My Profile</a></li>
+                            <li><a href="#" class="nav-link" data-page="aiPage"><i class="fas fa-brain"></i> AI Comparator</a></li>
+                            <li><a href="#" class="nav-link" data-page="settingsPage"><i class="fas fa-cog"></i> Settings</a></li>
+                            <li><a href="#"><i class="fas fa-bookmark"></i> Saved Comparisons</a></li>
+                            <li><a href="#"><i class="fas fa-history"></i> History</a></li>
+                            <li><a href="#"><i class="fas fa-question-circle"></i> Help & Support</a></li>
+                            <li><a href="#" id="logoutBtn2"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-container">
+            <aside class="sessions-panel">
+                <div class="sessions-header">
+                    <h2>Research Sessions</h2>
+                    <button class="new-session-btn">
+                        <i class="fas fa-plus"></i> New
+                    </button>
+                </div>
+                <div class="sessions-list">
+                    <div class="session-item active">
+                        <div class="session-name">Literature Review Analysis</div>
+                        <div class="session-date">Today, 10:24 AM</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="session-name">Research Methodology Comparison</div>
+                        <div class="session-date">Yesterday, 3:45 PM</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="session-name">Thesis Abstract Refinement</div>
+                        <div class="session-date">May 12, 2023</div>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="content-area">
+                <div class="settings-container">
+                    <div class="settings-header">
+                        <h1 class="settings-title">Account Settings</h1>
+                        <p class="settings-subtitle">Manage your ScholarCompare preferences and account details</p>
+                    </div>
+
+                    <div class="settings-content">
+                        <div class="settings-section">
+                            <h2 class="section-title">General Settings</h2>
+                            <div class="settings-item">
+                                <div>
+                                    <div class="settings-label">Email Notifications</div>
+                                    <div class="settings-description">Receive updates about new features and research tips</div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="settings-item">
+                                <div>
+                                    <div class="settings-label">Research Digest</div>
+                                    <div class="settings-description">Weekly summary of your research activity</div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="settings-item">
+                                <div>
+                                    <div class="settings-label">Auto-save Sessions</div>
+                                    <div class="settings-description">Automatically save your research sessions</div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h2 class="section-title">Display Preferences</h2>
+                            <div class="settings-item">
+                                <div>
+                                    <div class="settings-label">Dark Mode</div>
+                                    <div class="settings-description">Switch between light and dark themes</div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="darkModeToggle">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="settings-item">
+                                <div>
+                                    <div class="settings-label">Compact View</div>
+                                    <div class="settings-description">Show more content in less space</div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="settings-item">
+                                <div>
+                                    <div class="settings-label">Font Size</div>
+                                    <div class="settings-description">Adjust text size for better readability</div>
+                                </div>
+                                <select class="form-control" style="width: auto;">
+                                    <option>Small</option>
+                                    <option selected>Medium</option>
+                                    <option>Large</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h2 class="section-title">AI Model Preferences</h2>
+                            <div class="settings-item">
+                                <div>
+                                    <div class="settings-label">Default Models</div>
+                                    <div class="settings-description">AI models to include in comparisons by default</div>
+                                </div>
+                                <select class="form-control" style="width: auto;">
+                                    <option>All Available</option>
+                                    <option selected>Academic Focused</option>
+                                    <option>Custom Selection</option>
+                                </select>
+                            </div>
+                            <div class="settings-item">
+                                <div>
+                                    <div class="settings-label">Response Length</div>
+                                    <div class="settings-description">Default length for model responses</div>
+                                </div>
+                                <select class="form-control" style="width: auto;">
+                                    <option>Concise</option>
+                                    <option selected>Standard</option>
+                                    <option>Detailed</option>
+                                </select>
+                            </div>
+                            <div class="settings-item">
+                                <div>
+                                    <div class="settings-label">Citation Format</div>
+                                    <div class="settings-description">Preferred citation style for references</div>
+                                </div>
+                                <select class="form-control" style="width: auto;">
+                                    <option>APA</option>
+                                    <option selected>MLA</option>
+                                    <option>Chicago</option>
+                                    <option>IEEE</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h2 class="section-title">Privacy & Security</h2>
+                            <div class="settings-item">
+                                <div>
+                                    <div class="settings-label">Data Sharing</div>
+                                    <div class="settings-description">Allow anonymous usage data to improve service</div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="settings-item">
+                                <div>
+                                    <div class="settings-label">Two-Factor Authentication</div>
+                                    <div class="settings-description">Add an extra layer of security to your account</div>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="settings-item">
+                                <div>
+                                    <div class="settings-label">Session Timeout</div>
+                                    <div class="settings-description">Automatically log out after period of inactivity</div>
+                                </div>
+                                <select class="form-control" style="width: auto;">
+                                    <option>15 minutes</option>
+                                    <option selected>30 minutes</option>
+                                    <option>1 hour</option>
+                                    <option>Never</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button class="btn btn-primary">Save Changes</button>
+                        <button class="btn btn-outline">Reset to Defaults</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- AI Comparator Page (Original) -->
+    <div id="aiPage" class="page">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <div>
+                    <div class="logo-text">ScholarCompare</div>
+                    <div class="logo-subtitle">AI Model Comparator for Academia</div>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button class="theme-toggle" id="themeToggle5" aria-label="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <div class="user-profile" id="userProfile3">
+                    <div class="profile-icon">
+                        <i class="fas fa-user-graduate"></i>
+                    </div>
+                    <div class="profile-menu" id="profileMenu3">
+                        <ul>
+                            <li><a href="#" class="nav-link" data-page="profilePage"><i class="fas fa-user-circle"></i> My Profile</a></li>
+                            <li><a href="#" class="nav-link" data-page="aiPage"><i class="fas fa-brain"></i> AI Comparator</a></li>
+                            <li><a href="#" class="nav-link" data-page="settingsPage"><i class="fas fa-cog"></i> Settings</a></li>
+                            <li><a href="#"><i class="fas fa-bookmark"></i> Saved Comparisons</a></li>
+                            <li><a href="#"><i class="fas fa-history"></i> History</a></li>
+                            <li><a href="#"><i class="fas fa-question-circle"></i> Help & Support</a></li>
+                            <li><a href="#" id="logoutBtn3"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-container">
+            <aside class="sessions-panel">
+                <div class="sessions-header">
+                    <h2>Research Sessions</h2>
+                    <button class="new-session-btn">
+                        <i class="fas fa-plus"></i> New
+                    </button>
+                </div>
+                <div class="sessions-list">
+                    <div class="session-item active">
+                        <div class="session-name">Literature Review Analysis</div>
+                        <div class="session-date">Today, 10:24 AM</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="session-name">Research Methodology Comparison</div>
+                        <div class="session-date">Yesterday, 3:45 PM</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="session-name">Thesis Abstract Refinement</div>
+                        <div class="session-date">May 12, 2023</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="session-name">Technical Paper Analysis</div>
+                        <div class="session-date">May 10, 2023</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="session-name">Conference Paper Draft</div>
+                        <div class="session-date">May 8, 2023</div>
+                    </div>
+                    <div class="session-item">
+                        <div class="session-name">Research Proposal Feedback</div>
+                        <div class="session-date">May 5, 2023</div>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="content-area">
+                <section class="models-display">
+                    <div class="model-container">
+                        <div class="model-header">
+                            <div class="model-name">GPT-4 Academic</div>
+                            <div class="model-info">
+                                <span class="model-version">v2.1</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="model-response">
+                            <div class="response-content">
+                                <div class="response-title">Analysis of Prompt:</div>
+                                <div class="response-text">
+                                    <p>Based on the research question provided, I would suggest a mixed-methods approach combining quantitative surveys with qualitative interviews. This would allow for both statistical significance and in-depth understanding of participant perspectives.</p>
+                                    <p>The literature review indicates several gaps in current research, particularly regarding longitudinal effects. A follow-up study after 6 months would strengthen the research design.</p>
+                                </div>
+                                <div class="response-metrics">
+                                    <div class="metric">
+                                        <div class="metric-value">92%</div>
+                                        <div class="metric-label">Relevance</div>
+                                    </div>
+                                    <div class="metric">
+                                        <div class="metric-value">87%</div>
+                                        <div class="metric-label">Accuracy</div>
+                                    </div>
+                                    <div class="metric">
+                                        <div class="metric-value">4.2/5</div>
+                                        <div class="metric-label">Usefulness</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="model-container">
+                        <div class="model-header">
+                            <div class="model-name">Claude Scholar</div>
+                            <div class="model-info">
+                                <span class="model-version">v1.8</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="model-response">
+                            <div class="response-content">
+                                <div class="response-title">Research Methodology Suggestions:</div>
+                                <div class="response-text">
+                                    <p>For this research question, I recommend considering a systematic review as an initial step to comprehensively map the existing literature. This would help identify methodological approaches that have been successful in similar studies.</p>
+                                    <p>Given the interdisciplinary nature of your topic, you might also explore participatory action research methods to engage stakeholders directly in the research process, enhancing both relevance and impact.</p>
+                                </div>
+                                <div class="response-metrics">
+                                    <div class="metric">
+                                        <div class="metric-value">89%</div>
+                                        <div class="metric-label">Relevance</div>
+                                    </div>
+                                    <div class="metric">
+                                        <div class="metric-value">91%</div>
+                                        <div class="metric-label">Accuracy</div>
+                                    </div>
+                                    <div class="metric">
+                                        <div class="metric-value">4.5/5</div>
+                                        <div class="metric-label">Usefulness</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="model-container">
+                        <div class="model-header">
+                            <div class="model-name">Gemini Academic</div>
+                            <div class="model-info">
+                                <span class="model-version">v3.2</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="model-response">
+                            <div class="response-content">
+                                <div class="response-title">Methodological Framework:</div>
+                                <div class="response-text">
+                                    <p>Based on your research parameters, I propose a quasi-experimental design with pre-test and post-test measurements. This approach would allow for comparison between intervention and control groups while maintaining ethical research standards.</p>
+                                    <p>Consider incorporating digital ethnography methods to capture online interactions relevant to your study. This mixed-methods approach would provide both quantitative metrics and qualitative insights.</p>
+                                </div>
+                                <div class="response-metrics">
+                                    <div class="metric">
+                                        <div class="metric-value">85%</div>
+                                        <div class="metric-label">Relevance</div>
+                                    </div>
+                                    <div class="metric">
+                                        <div class="metric-value">88%</div>
+                                        <div class="metric-label">Accuracy</div>
+                                    </div>
+                                    <div class="metric">
+                                        <div class="metric-value">4.0/5</div>
+                                        <div class="metric-label">Usefulness</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="prompt-section">
+                    <div class="prompt-container">
+                        <textarea class="prompt-input" placeholder="Enter your research question or academic prompt here..."></textarea>
+                        <button class="submit-btn">
+                            <i class="fas fa-paper-plane"></i> Submit
+                        </button>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // Page Navigation
+        function showPage(pageId) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            
+            // Show the selected page
+            document.getElementById(pageId).classList.add('active');
+        }
+
+        // Navigation event listeners
+        document.getElementById('goToRegister').addEventListener('click', function(e) {
+            e.preventDefault();
+            showPage('registerPage');
+        });
+
+        document.getElementById('goToLogin').addEventListener('click', function(e) {
+            e.preventDefault();
+            showPage('loginPage');
+        });
+
+        // Profile menu navigation
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const pageId = this.getAttribute('data-page');
+                showPage(pageId);
+            });
+        });
+
+        // Login form submission
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            // In a real application, this would validate credentials with a backend
+            showPage('aiPage');
+        });
+
+        // Register form submission
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            // In a real application, this would create a new account
+            showPage('aiPage');
+        });
+
+        // Logout functionality
+        document.querySelectorAll('#logoutBtn, #logoutBtn2, #logoutBtn3').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                showPage('loginPage');
+            });
+        });
+
+        // Toggle profile menu
+        document.querySelectorAll('.user-profile').forEach(profile => {
+            profile.addEventListener('click', function() {
+                const menuId = this.querySelector('.profile-menu').id;
+                document.getElementById(menuId).classList.toggle('active');
+            });
+        });
+
+        // Close profile menu when clicking outside
+        document.addEventListener('click', function(event) {
+            document.querySelectorAll('.profile-menu').forEach(menu => {
+                const userProfile = menu.closest('.user-profile');
+                if (!userProfile.contains(event.target)) {
+                    menu.classList.remove('active');
+                }
+            });
+        });
+
+        // Session selection
+        const sessionItems = document.querySelectorAll('.session-item');
+        sessionItems.forEach(item => {
+            item.addEventListener('click', function() {
+                sessionItems.forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Model toggle functionality
+        const toggleSwitches = document.querySelectorAll('.toggle-switch input');
+        toggleSwitches.forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const modelContainer = this.closest('.model-container');
+                if (this.checked) {
+                    modelContainer.style.opacity = '1';
+                } else {
+                    modelContainer.style.opacity = '0.7';
+                }
+            });
+        });
+
+        // Submit prompt functionality
+        const submitBtn = document.querySelector('.submit-btn');
+        const promptInput = document.querySelector('.prompt-input');
+        
+        if (submitBtn && promptInput) {
+            submitBtn.addEventListener('click', function() {
+                const prompt = promptInput.value.trim();
+                if (prompt) {
+                    // In a real application, this would send the prompt to the backend
+                    // and update the model responses
+                    alert(`Research prompt submitted: ${prompt}`);
+                    // Clear the input
+                    promptInput.value = '';
+                } else {
+                    alert('Please enter a research question or prompt before submitting.');
+                }
+            });
+
+            // Allow submitting with Ctrl+Enter
+            promptInput.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    submitBtn.click();
+                }
+            });
+        }
+
+        // Theme toggle functionality
+        const themeToggles = document.querySelectorAll('.theme-toggle');
+        themeToggles.forEach(toggle => {
+            toggle.addEventListener('click', function() {
+                document.body.classList.toggle('dark-theme');
+                const icon = this.querySelector('i');
+                if (document.body.classList.contains('dark-theme')) {
+                    icon.classList.remove('fa-moon');
+                    icon.classList.add('fa-sun');
+                } else {
+                    icon.classList.remove('fa-sun');
+                    icon.classList.add('fa-moon');
+                }
+            });
+        });
+
+        // Dark mode toggle in settings
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        if (darkModeToggle) {
+            darkModeToggle.addEventListener('change', function() {
+                document.body.classList.toggle('dark-theme');
+                themeToggles.forEach(toggle => {
+                    const icon = toggle.querySelector('i');
+                    if (document.body.classList.contains('dark-theme')) {
+                        icon.classList.remove('fa-moon');
+                        icon.classList.add('fa-sun');
+                    } else {
+                        icon.classList.remove('fa-sun');
+                        icon.classList.add('fa-moon');
+                    }
+                });
+            });
+        }
+    </script>
+</body>
+</html>
