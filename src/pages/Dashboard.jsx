@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "../styles/Dashboard.css";
 import { chatService } from "../services/chat/ChatService";
 import { sessionService } from "../services/chat/session/SessionService";
@@ -20,7 +20,10 @@ const Dashboard = ({
   const [models, setModels] = useState([]);
   const [messages, setMessages] = useState({});
   const [loadingModels, setLoadingModels] = useState({});
+
   const sessionId = sessionData?.id || null;
+
+  const bottomRefs = useRef({});
 
   useEffect(() => {
     const load = async () => {
@@ -32,7 +35,10 @@ const Dashboard = ({
         }));
 
         const msgMap = {};
-        mappedModels.forEach((m) => (msgMap[m.id] = []));
+        mappedModels.forEach((m) => {
+          msgMap[m.id] = [];
+          bottomRefs.current[m.id] = bottomRefs.current[m.id] || React.createRef();
+        });
 
         sessionMessages?.forEach((msg) => {
           if (msg.type === "prompt") {
@@ -65,7 +71,10 @@ const Dashboard = ({
         }));
 
         const msgMap = {};
-        mappedModels.forEach((m) => (msgMap[m.id] = []));
+        mappedModels.forEach((m) => {
+          msgMap[m.id] = [];
+          bottomRefs.current[m.id] = React.createRef();
+        });
 
         setModels(mappedModels);
         setMessages(msgMap);
@@ -76,31 +85,39 @@ const Dashboard = ({
   }, [sessionData, sessionModels, sessionMessages]);
 
   useEffect(() => {
-  const restoreSession = async () => {
-    if (sessionData) return;
+    const restoreSession = async () => {
+      if (sessionData) return;
 
-    const storedSessionId = localStorage.getItem("currentSessionId");
-    if (!storedSessionId) return;
+      const storedSessionId = localStorage.getItem("currentSessionId");
+      if (!storedSessionId) return;
 
-    try {
-      const sessionRes = await sessionService.getSessionById(storedSessionId);
-      const modelRes = await sessionService.getSessionModels(storedSessionId);
-      const msgRes = await sessionService.getSessionMessages(storedSessionId);
+      try {
+        const sessionRes = await sessionService.getSessionById(storedSessionId);
+        const modelRes = await sessionService.getSessionModels(storedSessionId);
+        const msgRes = await sessionService.getSessionMessages(storedSessionId);
 
-      if (!sessionRes.ok || !modelRes.ok) return;
+        if (!sessionRes.ok || !modelRes.ok) return;
 
-      onSessionChange(
-        sessionRes.data.data.session,
-        msgRes?.data?.data?.messages || [],
-        modelRes.data.data.models
-      );
-    } catch (err) {
-      console.error("Failed to restore session", err);
-    }
-  };
+        onSessionChange(
+          sessionRes.data.data.session,
+          msgRes?.data?.data?.messages || [],
+          modelRes.data.data.models
+        );
+      } catch (err) {
+        console.error("Failed to restore session", err);
+      }
+    };
 
-  restoreSession();
-}, []);
+    restoreSession();
+  }, []);
+
+  useEffect(() => {
+    models.forEach((model) => {
+      bottomRefs.current[model.id]?.current?.scrollIntoView({
+        behavior: "smooth",
+      });
+    });
+  }, [messages, loadingModels, models]);
 
   const handleToggle = async (modelId, newState) => {
     try {
@@ -124,80 +141,81 @@ const Dashboard = ({
   const generateTitle = (text) =>
     text.trim().split(/\s+/).slice(0, 3).join(" ");
 
+  const isSending = Object.values(loadingModels).some(Boolean);
+
   const handleSubmit = async () => {
-  if (!prompt.trim() || isSending ) return;
-  setError("");
+    if (!prompt.trim() || isSending) return;
+    setError("");
 
-  try {
-    let activeSessionId = sessionData?.id || null;
+    try {
+      let activeSessionId = sessionData?.id || null;
 
-    if (!activeSessionId) {
-      const createRes = await sessionService.createSession(
-        generateTitle(prompt)
-      );
-      if (!createRes.ok) throw new Error("Create failed");
+      if (!activeSessionId) {
+        const createRes = await sessionService.createSession(
+          generateTitle(prompt)
+        );
+        if (!createRes.ok) throw new Error("Create failed");
 
-      const newSession = createRes.data.data.session;
-      activeSessionId = newSession.id;
+        const newSession = createRes.data.data.session;
+        activeSessionId = newSession.id;
 
-      localStorage.setItem("currentSessionId", activeSessionId);
+        localStorage.setItem("currentSessionId", activeSessionId);
 
-      const modelsRes = await chatService.getModels();
-      if (modelsRes.ok) {
-        for (const m of modelsRes.data.data) {
-          await sessionService.assignModelToSession(activeSessionId, m.id);
-          await sessionService.updateModelVisibility(activeSessionId, m.id, {
-            is_visible: 1,
+        const modelsRes = await chatService.getModels();
+        if (modelsRes.ok) {
+          for (const m of modelsRes.data.data) {
+            await sessionService.assignModelToSession(activeSessionId, m.id);
+            await sessionService.updateModelVisibility(activeSessionId, m.id, {
+              is_visible: 1,
+            });
+          }
+        }
+
+        onSessionChange(newSession, [], []);
+        onSessionCreated(newSession);
+      }
+
+      await sessionService.activateSession(activeSessionId);
+
+      const loaders = {};
+      models.forEach((m) => {
+        if (m.visible === 1) loaders[m.id] = true;
+      });
+      setLoadingModels(loaders);
+
+      const newMessages = { ...messages };
+      Object.keys(newMessages).forEach((id) => {
+        newMessages[id].push({ type: "prompt", content: prompt });
+      });
+      setMessages({ ...newMessages });
+
+      for (const model of models) {
+        if (model.visible !== 1) continue;
+
+        const res = await chatService.sendPromptToModel(
+          activeSessionId,
+          model.id,
+          prompt
+        );
+
+        if (res.ok) {
+          newMessages[model.id].push({
+            type: "response",
+            content: res.data?.data?.response?.content || "",
           });
         }
+
+        setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+        setMessages({ ...newMessages });
       }
 
-      onSessionChange(newSession, [], []);
-      onSessionCreated(newSession);
+      setPrompt("");
+    } catch (err) {
+      console.error(err);
+      setError("Error sending prompt");
     }
+  };
 
-    await sessionService.activateSession(activeSessionId);
-
-    const loaders = {};
-    models.forEach((m) => {
-      if (m.visible === 1) loaders[m.id] = true;
-    });
-    setLoadingModels(loaders);
-
-    const newMessages = { ...messages };
-    Object.keys(newMessages).forEach((id) => {
-      newMessages[id].push({ type: "prompt", content: prompt });
-    });
-    setMessages({ ...newMessages });
-
-    for (const model of models) {
-      if (model.visible !== 1) continue;
-
-      const res = await chatService.sendPromptToModel(
-        activeSessionId,
-        model.id,
-        prompt
-      );
-
-      if (res.ok) {
-        newMessages[model.id].push({
-          type: "response",
-          content: res.data?.data?.response?.content || "",
-        });
-      }
-
-      setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
-      setMessages({ ...newMessages });
-    }
-
-    setPrompt("");
-  } catch (err) {
-    console.error(err);
-    setError("Error sending prompt");
-  }
-};
-
-const isSending = Object.values(loadingModels).some(Boolean);
   return (
     <main className="dashboard">
       <div className="models-row">
@@ -267,13 +285,15 @@ const isSending = Object.values(loadingModels).some(Boolean);
                     </div>
                   </div>
                 )}
+
+                <div ref={bottomRefs.current[model.id]} />
               </div>
             </div>
           </div>
         ))}
       </div>
 
-<div className="prompt-box">
+      <div className="prompt-box">
         <div className="prompt-inner">
           <textarea
             className="prompt-input"
