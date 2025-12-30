@@ -40,20 +40,28 @@ const Dashboard = ({
           bottomRefs.current[m.id] = bottomRefs.current[m.id] || React.createRef();
         });
 
+        // Group messages by prompt_id for responses
+        const promptMap = {};
         sessionMessages?.forEach((msg) => {
-          if (msg.type === "prompt") {
-            Object.keys(msgMap).forEach((id) => {
-              msgMap[id].push({ type: "prompt", content: msg.content });
-            });
-          }
+           if (msg.type === "prompt") {
+             promptMap[msg.id] = msg;
+           }
+         });
 
-          if (msg.type === "response" && msgMap[msg.model_id]) {
-            msgMap[msg.model_id].push({
-              type: "response",
-              content: msg.content,
-            });
-          }
-        });
+        sessionMessages?.forEach((msg) => {
+           if (msg.type === "response" && msgMap[msg.model_id]) {
+             // Add the corresponding prompt first, if not already added
+             const prompt = promptMap[msg.prompt_id];
+             if (prompt && !msgMap[msg.model_id].some(m => m.type === "prompt" && m.content === prompt.content)) {
+               msgMap[msg.model_id].push({ type: "prompt", content: prompt.content });
+             }
+             // Then add the response
+             msgMap[msg.model_id].push({
+               type: "response",
+               content: msg.content,
+             });
+           }
+         });
 
         setModels(mappedModels);
         setMessages(msgMap);
