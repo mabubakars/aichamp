@@ -12,6 +12,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    localStorage.setItem("loggedOut", "true"); 
     localStorage.removeItem("token");
     sessionStorage.removeItem("token");
     localStorage.removeItem("currentSessionId");

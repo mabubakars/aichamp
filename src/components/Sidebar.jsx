@@ -15,7 +15,6 @@ const Sidebar = ({ sessions, setSessions, onSessionChange }) => {
   const [editingSessionId, setEditingSessionId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
 
-  // 🔴 DELETE POPUP STATE
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const navigate = useNavigate();
@@ -87,7 +86,6 @@ const Sidebar = ({ sessions, setSessions, onSessionChange }) => {
     setEditTitle("");
   };
 
-  // ✅ CONFIRMED DELETE HANDLER
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
 
@@ -196,7 +194,6 @@ const Sidebar = ({ sessions, setSessions, onSessionChange }) => {
         </div>
       </aside>
 
-      {/* ✅ GENERIC CONFIRM DELETE POPUP */}
       <ConfirmDialog
         open={!!deleteTarget}
         title="Delete Session"

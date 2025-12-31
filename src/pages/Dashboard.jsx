@@ -7,7 +7,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { duotoneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-
+import { useContext } from "react";
+import { AuthContext } from "../guards/context/AuthContext";
 const Dashboard = ({
   sessionData,
   sessionMessages,
@@ -20,10 +21,10 @@ const Dashboard = ({
   const [models, setModels] = useState([]);
   const [messages, setMessages] = useState({});
   const [loadingModels, setLoadingModels] = useState({});
-
   const sessionId = sessionData?.id || null;
-
   const bottomRefs = useRef({});
+  const { token } = useContext(AuthContext);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -119,6 +120,17 @@ const Dashboard = ({
     });
   }, [messages, loadingModels, models]);
 
+  useEffect(() => {
+    if (!token) {
+      setModels([]);
+      setMessages({});
+      setLoadingModels({});
+      setPrompt("");
+      setError("");
+      onSessionChange(null, [], []);
+    }
+  }, [token]);
+
   const handleToggle = async (modelId, newState) => {
     try {
       const res = await sessionService.updateModelVisibility(
@@ -144,77 +156,81 @@ const Dashboard = ({
   const isSending = Object.values(loadingModels).some(Boolean);
 
   const handleSubmit = async () => {
-    if (!prompt.trim() || isSending) return;
-    setError("");
+  if (!prompt.trim() || isSubmitting) return;
 
-    try {
-      let activeSessionId = sessionData?.id || null;
+  setError("");
+  setIsSubmitting(true);
 
-      if (!activeSessionId) {
-        const createRes = await sessionService.createSession(
-          generateTitle(prompt)
-        );
-        if (!createRes.ok) throw new Error("Create failed");
+  try {
+    let activeSessionId = sessionData?.id || null;
 
-        const newSession = createRes.data.data.session;
-        activeSessionId = newSession.id;
+    if (!activeSessionId) {
+      const createRes = await sessionService.createSession(
+        generateTitle(prompt)
+      );
+      if (!createRes.ok) throw new Error("Create failed");
 
-        localStorage.setItem("currentSessionId", activeSessionId);
+      const newSession = createRes.data.data.session;
+      activeSessionId = newSession.id;
 
-        const modelsRes = await chatService.getModels();
-        if (modelsRes.ok) {
-          for (const m of modelsRes.data.data) {
-            await sessionService.assignModelToSession(activeSessionId, m.id);
-            await sessionService.updateModelVisibility(activeSessionId, m.id, {
-              is_visible: 1,
-            });
-          }
-        }
+      localStorage.setItem("currentSessionId", activeSessionId);
 
-        onSessionChange(newSession, [], []);
-        onSessionCreated(newSession);
-      }
-
-      await sessionService.activateSession(activeSessionId);
-
-      const loaders = {};
-      models.forEach((m) => {
-        if (m.visible === 1) loaders[m.id] = true;
-      });
-      setLoadingModels(loaders);
-
-      const newMessages = { ...messages };
-      Object.keys(newMessages).forEach((id) => {
-        newMessages[id].push({ type: "prompt", content: prompt });
-      });
-      setMessages({ ...newMessages });
-
-      for (const model of models) {
-        if (model.visible !== 1) continue;
-
-        const res = await chatService.sendPromptToModel(
-          activeSessionId,
-          model.id,
-          prompt
-        );
-
-        if (res.ok) {
-          newMessages[model.id].push({
-            type: "response",
-            content: res.data?.data?.response?.content || "",
+      const modelsRes = await chatService.getModels();
+      if (modelsRes.ok) {
+        for (const m of modelsRes.data.data) {
+          await sessionService.assignModelToSession(activeSessionId, m.id);
+          await sessionService.updateModelVisibility(activeSessionId, m.id, {
+            is_visible: 1,
           });
         }
-
-        setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
-        setMessages({ ...newMessages });
       }
 
-      setPrompt("");
-    } catch (err) {
-      console.error(err);
-      setError("Error sending prompt");
+      onSessionChange(newSession, [], []);
+      onSessionCreated(newSession);
     }
-  };
+
+    await sessionService.activateSession(activeSessionId);
+
+    const loaders = {};
+    models.forEach((m) => {
+      if (m.visible === 1) loaders[m.id] = true;
+    });
+    setLoadingModels(loaders);
+
+    const newMessages = { ...messages };
+    Object.keys(newMessages).forEach((id) => {
+      newMessages[id].push({ type: "prompt", content: prompt });
+    });
+    setMessages({ ...newMessages });
+
+    for (const model of models) {
+      if (model.visible !== 1) continue;
+
+      const res = await chatService.sendPromptToModel(
+        activeSessionId,
+        model.id,
+        prompt
+      );
+
+      if (res.ok) {
+        newMessages[model.id].push({
+          type: "response",
+          content: res.data?.data?.response?.content || "",
+        });
+      }
+
+      setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+      setMessages({ ...newMessages });
+    }
+
+    setPrompt("");
+  } catch (err) {
+    console.error(err);
+    setError("Error sending prompt");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   return (
     <main className="dashboard">
