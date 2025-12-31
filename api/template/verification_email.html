@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email - ScholarCompare</title>
+    <style>
+        /* CSS Variables matching the main application */
+        :root {
+            --navy: #1a2b4c;
+            --accent: #4a7bff;
+            --light-gray: #f8f9fa;
+            --medium-gray: #e9ecef;
+            --dark-gray: #6c757d;
+            --text: #212529;
+            --white: #ffffff;
+            --border-radius: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text);
+            background-color: var(--light-gray);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: var(--white);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .email-header {
+            background-color: var(--navy);
+            color: var(--white);
+            padding: 30px 40px;
+            text-align: center;
+        }
+
+        .logo-section {
+            margin-bottom: 20px;
+        }
+
+        .logo-text {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin-bottom: 5px;
+        }
+
+        .logo-subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .email-content {
+            padding: 40px;
+        }
+
+        .verification-title {
+            font-size: 20px;
+            color: var(--navy);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .verification-message {
+            margin-bottom: 30px;
+            line-height: 1.7;
+        }
+
+        .cta-button {
+            display: inline-block;
+            padding: 15px 30px;
+            background-color: var(--accent);
+            color: var(--white);
+            text-decoration: none;
+            border-radius: var(--border-radius);
+            font-weight: 500;
+            font-size: 16px;
+            text-align: center;
+            margin: 20px 0;
+            transition: background-color 0.3s ease;
+        }
+
+        .cta-button:hover {
+            background-color: #3a6bff;
+        }
+
+        .verification-link {
+            word-break: break-all;
+            background-color: var(--medium-gray);
+            padding: 15px;
+            border-radius: var(--border-radius);
+            font-family: monospace;
+            font-size: 12px;
+            margin: 20px 0;
+            border: 1px solid #dee2e6;
+        }
+
+        .warning-text {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            margin: 20px 0;
+            font-size: 13px;
+        }
+
+        .email-footer {
+            background-color: var(--light-gray);
+            padding: 30px 40px;
+            text-align: center;
+            border-top: 1px solid var(--medium-gray);
+        }
+
+        .footer-text {
+            color: var(--dark-gray);
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .footer-links {
+            margin-top: 15px;
+        }
+
+        .footer-links a {
+            color: var(--accent);
+            text-decoration: none;
+            margin: 0 10px;
+            font-size: 12px;
+        }
+
+        .footer-links a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive design */
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            .email-container {
+                margin: 0;
+            }
+
+            .email-header,
+            .email-content,
+            .email-footer {
+                padding: 20px;
+            }
+
+            .logo-text {
+                font-size: 20px;
+            }
+
+            .verification-title {
+                font-size: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="email-header">
+            <div class="logo-section">
+                <div class="logo-text">ScholarCompare</div>
+                <div class="logo-subtitle">AI Model Comparator for Academia</div>
+            </div>
+            <h1 style="margin: 0; font-size: 18px;">Verify Your Email Address</h1>
+        </div>
+
+        <div class="email-content">
+            <div class="verification-message">
+                <p>Hello <strong>{{user_name}}</strong>,</p>
+
+                <p>Thank you for registering with ScholarCompare! To complete your account setup and start comparing AI models for your research, please verify your email address.</p>
+
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{{verification_url}}" class="cta-button">Verify Email Address</a>
+                </div>
+
+                <p>If the button above doesn't work, you can copy and paste this link into your browser:</p>
+
+                <div class="verification-link">{{verification_url}}</div>
+
+                <div class="warning-text">
+                    <strong>Security Notice:</strong> This verification link will expire in 24 hours for your account security. If you didn't create an account with ScholarCompare, please ignore this email.
+                </div>
+
+                <p>Once verified, you'll have full access to compare leading AI models like GPT-4, Claude, and Gemini, specifically optimized for academic research.</p>
+
+                <p>Welcome to the future of academic AI research!</p>
+            </div>
+        </div>
+
+        <div class="email-footer">
+            <div class="footer-text">
+                <p>&copy; 2024 ScholarCompare. All rights reserved.</p>
+                <p>This email was sent to {{user_email}} because someone requested account verification.</p>
+            </div>
+
+            <div class="footer-links">
+                <a href="#">Privacy Policy</a> |
+                <a href="#">Terms of Service</a> |
+                <a href="#">Help Center</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
