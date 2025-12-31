@@ -7,7 +7,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { duotoneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-
+import { useContext } from "react";
+import { AuthContext } from "../guards/context/AuthContext";
 const Dashboard = ({
   sessionData,
   sessionMessages,
@@ -22,6 +23,9 @@ const Dashboard = ({
   const [loadingModels, setLoadingModels] = useState({});
 
   const sessionId = sessionData?.id || null;
+  const bottomRefs = useRef({});
+  const { token } = useContext(AuthContext);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const bottomRefs = useRef({});
 

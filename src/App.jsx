@@ -1,4 +1,5 @@
 import { Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { useState, useEffect, useContext } from "react";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
@@ -6,15 +7,17 @@ import AuthGuard from "./guards/AuthGuard";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import ForgotPassword from "./pages/ForgotPassword";
-import { AuthProvider } from "./guards/context/AuthContext";
-import { ToastContainer } from "react-toastify";
 import Profile from "./pages/Profile";
 import ChangePassword from "./pages/ChangePassword";
 import ResetPassword from "./pages/ResetPassword";
-import { useState,useEffect } from "react";
-import { sessionService } from "../src/services/chat/session/SessionService";
-const App = () => {
+import { AuthProvider, AuthContext } from "./guards/context/AuthContext";
+import { ToastContainer } from "react-toastify";
+import { sessionService } from "./services/chat/session/SessionService";
+
+const AppContent = () => {
   const location = useLocation();
+  const { token } = useContext(AuthContext);
+
   const noLayoutRoutes = ["/login", "/signup", "/forgot-password", "/reset-password"];
   const hideLayout = noLayoutRoutes.includes(location.pathname);
 
@@ -23,26 +26,36 @@ const App = () => {
   const [sessionModels, setSessionModels] = useState([]);
   const [sessions, setSessions] = useState([]);
 
-  const handleSessionCreated = (newSession) => {
-  setSessions((prev) => [newSession, ...prev]);
-  };
+  useEffect(() => {
+    if (!token) return;
+
+    const loadSessions = async () => {
+      const res = await sessionService.getSessions();
+      if (res.ok) {
+        setSessions(res.data.data.sessions);
+      }
+    };
+
+    loadSessions();
+  }, [token]);
 
   useEffect(() => {
-  const loadSessions = async () => {
-    const res = await sessionService.getSessions();
-    if (res.ok) {
-      setSessions(res.data.data.sessions);
+    if (!token) {
+      setSessionData(null);
+      setSessionMessages([]);
+      setSessionModels([]);
+      setSessions([]);
     }
+  }, [token]);
+
+  const handleSessionCreated = (newSession) => {
+    setSessions((prev) => [newSession, ...prev]);
   };
 
-  loadSessions();
-}, []);
-
   return (
-    <AuthProvider>
-      <div style={{ display: "flex", height: "90vh" }}>
-        {!hideLayout && (
-          <Sidebar
+    <div style={{ display: "flex", height: "90vh" }}>
+      {!hideLayout && token && (
+        <Sidebar
           sessions={sessions}
           setSessions={setSessions}
           onSessionChange={(session, messages, models) => {
@@ -51,30 +64,28 @@ const App = () => {
             setSessionModels(models);
 
             if (!session) {
-              // 🔥 FORCE RESET
               localStorage.removeItem("currentSessionId");
             }
           }}
         />
+      )}
 
-        )}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        {!hideLayout && token && <Header />}
+        <ToastContainer position="top-right" autoClose={3000} />
 
-        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          {!hideLayout && <Header />}
-          <ToastContainer position="top-right" autoClose={3000} />
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
-          <Routes>
-            <Route path="/" element={<AuthGuard><Navigate to="/dashboard" replace /></AuthGuard>} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-
-            <Route
-              path="/dashboard"
-              element={
-                <AuthGuard>
-                  <Dashboard
+          <Route
+            path="/dashboard"
+            element={
+              <AuthGuard>
+                <Dashboard
                   sessionData={sessionData}
                   sessionMessages={sessionMessages}
                   sessionModels={sessionModels}
@@ -82,40 +93,40 @@ const App = () => {
                     setSessionData(session);
                     setSessionMessages(messages);
                     setSessionModels(models);
-
-                    if (!session) {
-                      localStorage.removeItem("currentSessionId");
-                    }
                   }}
                   onSessionCreated={handleSessionCreated}
                 />
+              </AuthGuard>
+            }
+          />
 
-                </AuthGuard>
-              }
-            />
+          <Route
+            path="/profile"
+            element={
+              <AuthGuard>
+                <Profile />
+              </AuthGuard>
+            }
+          />
 
-            <Route
-              path="/profile"
-              element={
-                <AuthGuard>
-                  <Profile />
-                </AuthGuard>
-              }
-            />
-
-            <Route
-              path="/change-password"
-              element={
-                <AuthGuard>
-                  <ChangePassword />
-                </AuthGuard>
-              }
-            />
-          </Routes>
-        </div>
+          <Route
+            path="/change-password"
+            element={
+              <AuthGuard>
+                <ChangePassword />
+              </AuthGuard>
+            }
+          />
+        </Routes>
       </div>
-    </AuthProvider>
+    </div>
   );
 };
+
+const App = () => (
+  <AuthProvider>
+    <AppContent />
+  </AuthProvider>
+);
 
 export default App;
