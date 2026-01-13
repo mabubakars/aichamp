@@ -17,6 +17,7 @@ import {
 
 import "../styles/Header.css";
 import { AuthContext } from "../guards/context/AuthContext";
+import { faCrown } from "@fortawesome/free-solid-svg-icons";
 
 const Header = () => {
   const navigate = useNavigate();
@@ -52,6 +53,9 @@ const Header = () => {
               <li><a href="#"><FontAwesomeIcon icon={faQuestionCircle} /> Help & Support</a></li>
               <li onClick={() => navigate("/change-password")}>
                 <FontAwesomeIcon icon={faKey} /> Change Password
+              </li>
+              <li onClick={() => navigate("/upgrade")}>
+                <FontAwesomeIcon icon={faCrown} /> Upgrade Plan
               </li>
               <li><a href="#" onClick={logout}><FontAwesomeIcon icon={faSignOutAlt} /> Logout</a></li>
             </ul>

@@ -13,6 +13,7 @@ import ResetPassword from "./pages/ResetPassword";
 import { AuthProvider, AuthContext } from "./guards/context/AuthContext";
 import { ToastContainer } from "react-toastify";
 import { sessionService } from "./services/chat/session/SessionService";
+import UpgradePlan from "./pages/UpgradePlan";
 
 const AppContent = () => {
   const location = useLocation();
@@ -114,6 +115,14 @@ const AppContent = () => {
             element={
               <AuthGuard>
                 <ChangePassword />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/upgrade"
+            element={
+              <AuthGuard>
+                <UpgradePlan />
               </AuthGuard>
             }
           />
