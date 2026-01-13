@@ -1,21 +1,25 @@
 <?php
 class BillingService {
+    private $db;
     private $subscriptionModel;
     private $subscriptionPlanModel;
     private $subscriptionInvoiceModel;
     private $paymentGatewayModel;
     private $paymentTransactionModel;
+    private $paymentMethodModel;
     private $subscriptionManager;
     private $validator;
     private $stripeService;
     private $paypalService;
 
     public function __construct($db) {
+        $this->db = $db;
         $this->subscriptionModel = new Subscription($db);
         $this->subscriptionPlanModel = new SubscriptionPlan($db);
         $this->subscriptionInvoiceModel = new SubscriptionInvoice($db);
         $this->paymentGatewayModel = new PaymentGateway($db);
         $this->paymentTransactionModel = new PaymentTransaction($db);
+        $this->paymentMethodModel = new PaymentMethod($db);
         $this->subscriptionManager = new SubscriptionManager($db);
         $this->validator = new Validator();
 
@@ -33,6 +37,143 @@ class BillingService {
             Logger::warning("PayPal service not available", ['error' => $e->getMessage()]);
             $this->paypalService = null;
         }
+    }
+
+    /**
+     * Create or get Stripe customer for user
+     */
+    public function createStripeCustomer($userId) {
+        $userModel = new User($this->db);
+        $user = $userModel->getById($userId);
+
+        if (!$user) {
+            throw new InvalidArgumentException("User not found");
+        }
+
+        // Check if user already has a Stripe customer ID
+        if ($user['stripe_customer_id']) {
+            return $user['stripe_customer_id'];
+        }
+
+        // Create Stripe customer
+        if (!$this->stripeService) {
+            throw new RuntimeException("Stripe service not available");
+        }
+
+        $customerData = [
+            'email' => $user['email'],
+            'name' => $user['first_name'] . ' ' . $user['last_name'],
+            'metadata' => [
+                'user_id' => $userId
+            ]
+        ];
+
+        $customer = $this->stripeService->createCustomer($customerData);
+
+        // Update user with Stripe customer ID
+        $userModel->updateStripeCustomerId($userId, $customer['id']);
+
+        Logger::info("Stripe customer created for user", [
+            'user_id' => $userId,
+            'stripe_customer_id' => $customer['id']
+        ]);
+
+        return $customer['id'];
+    }
+
+    /**
+     * Create Stripe subscription
+     */
+    public function createStripeSubscription($userId, $planId, $paymentMethodId = null) {
+        $plan = $this->subscriptionPlanModel->getById($planId);
+        if (!$plan) {
+            throw new InvalidArgumentException("Invalid plan ID");
+        }
+
+        // Get or create Stripe customer
+        $customerId = $this->createStripeCustomer($userId);
+
+        if (!$this->stripeService) {
+            throw new RuntimeException("Stripe service not available");
+        }
+
+        // Create subscription data
+        $subscriptionData = [
+            'customer_id' => $customerId,
+            'plan_name' => $plan['name'],
+            'amount' => $plan['price_monthly'] ?? $plan['price_yearly'] ?? 0,
+            'currency' => $plan['currency'],
+            'interval' => isset($plan['price_monthly']) ? 'month' : 'year',
+            'metadata' => [
+                'user_id' => $userId,
+                'plan_id' => $planId
+            ]
+        ];
+
+        if ($paymentMethodId) {
+            $subscriptionData['default_payment_method'] = $paymentMethodId;
+        }
+
+        $stripeSubscription = $this->stripeService->createSubscription($subscriptionData);
+
+        // Create local subscription record
+        $tier = $this->mapPlanTypeToTier($plan['plan_type']);
+        $subscription = $this->subscriptionModel->create([
+            'user_id' => $userId,
+            'tier' => $tier,
+            'status' => 'active',
+            'stripe_subscription_id' => $stripeSubscription['id'],
+            'stripe_price_id' => null, // Will be set from webhook
+            'current_period_start' => date('Y-m-d H:i:s', $stripeSubscription['current_period_start']),
+            'current_period_end' => date('Y-m-d H:i:s', $stripeSubscription['current_period_end'])
+        ]);
+
+        Logger::info("Stripe subscription created", [
+            'user_id' => $userId,
+            'stripe_subscription_id' => $stripeSubscription['id'],
+            'local_subscription_id' => $subscription['id']
+        ]);
+
+        return [
+            'subscription' => $subscription,
+            'stripe_subscription' => $stripeSubscription
+        ];
+    }
+
+    /**
+     * Cancel Stripe subscription
+     */
+    public function cancelStripeSubscription($userId, $cancelAtPeriodEnd = true) {
+        $subscription = $this->subscriptionModel->getActiveByUserId($userId);
+        if (!$subscription || !$subscription['stripe_subscription_id']) {
+            throw new InvalidArgumentException("No active Stripe subscription found");
+        }
+
+        if (!$this->stripeService) {
+            throw new RuntimeException("Stripe service not available");
+        }
+
+        $result = $this->stripeService->cancelSubscription($subscription['stripe_subscription_id']);
+
+        // Update local subscription
+        $updateData = [
+            'status' => $cancelAtPeriodEnd ? 'active' : 'cancelled',
+            'cancel_at_period_end' => $cancelAtPeriodEnd
+        ];
+
+        if (!$cancelAtPeriodEnd) {
+            $updateData['updated_at'] = date('Y-m-d H:i:s');
+        }
+
+        $this->subscriptionModel->update($subscription['id'], $updateData);
+
+        Logger::info("Stripe subscription cancelled", [
+            'user_id' => $userId,
+            'stripe_subscription_id' => $subscription['stripe_subscription_id'],
+            'cancel_at_period_end' => $cancelAtPeriodEnd
+        ]);
+
+        return $result;
     }
 
     /**
@@ -129,6 +270,9 @@ class BillingService {
             throw new InvalidArgumentException("Payment gateway not available");
         }
 
+        // Get or create Stripe customer for user
+        $customerId = $this->createStripeCustomer($userId);
+
         // Create invoice first
         $invoice = $this->subscriptionInvoiceModel->create([
             'subscription_id' => null, // Will be set after subscription creation
@@ -155,6 +299,7 @@ class BillingService {
         $paymentIntent = $this->createGatewayPaymentIntent($gatewayKey, [
             'amount' => $transaction['amount'] * 100, // Convert to cents
             'currency' => $transaction['currency'],
+            'customer_id' => $customerId,
             'metadata' => [
                 'transaction_id' => $transaction['id'],
                 'invoice_id' => $invoice['id'],
@@ -199,9 +344,30 @@ class BillingService {
             // Update invoice
             $this->subscriptionInvoiceModel->markAsPaid($transaction['metadata']['invoice_id']);
 
-            // Upgrade subscription if this was for a plan
+            // Handle subscription if this was for a plan
             if (isset($transaction['metadata']['plan_id'])) {
-                $this->upgradeSubscription($userId, $transaction['metadata']['plan_id']);
+                $planId = $transaction['metadata']['plan_id'];
+                $plan = $this->subscriptionPlanModel->getById($planId);
+                
+                // Check if user has an active subscription
+                $activeSubscription = $this->subscriptionModel->getActiveByUserId($userId);
+                
+                if ($activeSubscription) {
+                    // Upgrade existing subscription
+                    $this->upgradeSubscription($userId, $planId);
+                } else {
+                    // Create new subscription for first-time payment
+                    $tier = $this->mapPlanTypeToTier($plan['plan_type']);
+                    $this->subscriptionModel->create([
+                        'user_id' => $userId,
+                        'tier' => $tier,
+                        'status' => 'active',
+                        'stripe_subscription_id' => null,
+                        'stripe_price_id' => null,
+                        'current_period_start' => date('Y-m-d H:i:s'),
+                        'current_period_end' => date('Y-m-d H:i:s', strtotime('+1 month'))
+                    ]);
+                }
             }
 
             return [
@@ -238,25 +404,32 @@ class BillingService {
             ];
         }
 
-        // Get invoices for these subscriptions
+        // Build placeholders for IN clause
+        $placeholders = str_repeat('?,', count($subscriptionIds) - 1) . '?';
+
+        // Get total count
+        $countSql = "SELECT COUNT(*) as total FROM subscription_invoices
+                     WHERE subscription_id IN ($placeholders)";
+        $countResult = $this->db->query($countSql, $subscriptionIds);
+        $total = $countResult[0]['total'] ?? 0;
+
+        // Get paginated invoices
+        $offset = ($page - 1) * $limit;
         $sql = "SELECT * FROM subscription_invoices
-                WHERE subscription_id IN (" . str_repeat('?,', count($subscriptionIds) - 1) . "?)
+                WHERE subscription_id IN ($placeholders)
                 ORDER BY created_at DESC
                 LIMIT ? OFFSET ?";
 
-        $offset = ($page - 1) * $limit;
         $params = array_merge($subscriptionIds, [$limit, $offset]);
-
-        $invoices = $this->subscriptionInvoiceModel->getBySubscriptionId(null); // We'll need to modify this
-        // For now, return empty - need to implement proper multi-subscription invoice retrieval
+        $invoices = $this->db->query($sql, $params);
 
         return [
-            'invoices' => [],
+            'invoices' => $invoices,
             'pagination' => [
                 'page' => $page,
                 'limit' => $limit,
-                'total' => 0,
-                'pages' => 0
+                'total' => $total,
+                'pages' => ceil($total / $limit)
             ]
         ];
     }
@@ -281,33 +454,251 @@ class BillingService {
     }
 
     /**
-     * Get payment methods (placeholder)
+     * Get payment methods for user
      */
     public function getPaymentMethods($userId) {
-        // In a real implementation, this would retrieve saved payment methods
-        return [
-            'payment_methods' => []
-        ];
+        Logger::debug("Getting payment methods for user", ['user_id' => $userId]);
+
+        try {
+            // Get Stripe customer ID for user
+            $userModel = new User($this->db);
+            $user = $userModel->getById($userId);
+
+            Logger::debug("User lookup result", [
+                'user_id' => $userId,
+                'user_found' => $user ? true : false,
+                'has_stripe_customer_id' => $user && $user['stripe_customer_id'] ? true : false,
+                'stripe_customer_id' => $user['stripe_customer_id'] ?? null
+            ]);
+
+            if (!$user || !$user['stripe_customer_id']) {
+                Logger::info("User has no Stripe customer ID, returning empty payment methods", ['user_id' => $userId]);
+                return [
+                    'payment_methods' => []
+                ];
+            }
+
+            // Get payment methods from Stripe
+            if (!$this->stripeService) {
+                Logger::error("Stripe service not available for getPaymentMethods", ['user_id' => $userId]);
+                throw new RuntimeException("Stripe service not available");
+            }
+
+            Logger::debug("Calling Stripe API to get payment methods", ['user_id' => $userId, 'stripe_customer_id' => $user['stripe_customer_id']]);
+            $stripeMethods = $this->stripeService->getPaymentMethods($user['stripe_customer_id']);
+            Logger::debug("Stripe API call result", ['user_id' => $userId, 'stripe_methods_count' => count($stripeMethods)]);
+
+            // Sync with local database
+            $localMethods = $this->paymentMethodModel->getByUserId($userId);
+            $localMethodIds = array_column($localMethods, 'gateway_payment_method_id');
+
+            // Add new methods from Stripe
+            foreach ($stripeMethods as $stripeMethod) {
+                if (!in_array($stripeMethod['id'], $localMethodIds)) {
+                    $methodData = [
+                        'user_id' => $userId,
+                        'gateway_id' => $this->getStripeGatewayId(),
+                        'gateway_payment_method_id' => $stripeMethod['id'],
+                        'type' => $stripeMethod['type'],
+                        'last4' => $stripeMethod['card']['last4'] ?? null,
+                        'brand' => $stripeMethod['card']['brand'] ?? null,
+                        'expiry_month' => $stripeMethod['card']['exp_month'] ?? null,
+                        'expiry_year' => $stripeMethod['card']['exp_year'] ?? null,
+                        'is_default' => false, // Will be set later if needed
+                        'metadata' => $stripeMethod
+                    ];
+
+                    $this->paymentMethodModel->create($methodData);
+                }
+            }
+
+            // Remove local methods that no longer exist in Stripe
+            foreach ($localMethods as $localMethod) {
+                $existsInStripe = false;
+                foreach ($stripeMethods as $stripeMethod) {
+                    if ($stripeMethod['id'] === $localMethod['gateway_payment_method_id']) {
+                        $existsInStripe = true;
+                        break;
+                    }
+                }
+
+                if (!$existsInStripe) {
+                    $this->paymentMethodModel->delete($localMethod['id']);
+                }
+            }
+
+            // Get updated local methods
+            $methods = $this->paymentMethodModel->getByUserId($userId);
+
+            // Format for API response
+            $formattedMethods = array_map(function($method) {
+                return [
+                    'id' => $method['id'],
+                    'type' => $method['type'],
+                    'last4' => $method['last4'],
+                    'brand' => $method['brand'],
+                    'expiry_month' => $method['expiry_month'],
+                    'expiry_year' => $method['expiry_year'],
+                    'is_default' => $method['is_default'],
+                    'created_at' => $method['created_at']
+                ];
+            }, $methods);
+
+            return [
+                'payment_methods' => $formattedMethods
+            ];
+
+        } catch (Exception $e) {
+            Logger::error("Failed to get payment methods", [
+                'user_id' => $userId,
+                'error' => $e->getMessage()
+            ]);
+
+            // Return local methods as fallback
+            $methods = $this->paymentMethodModel->getByUserId($userId);
+            $formattedMethods = array_map(function($method) {
+                return [
+                    'id' => $method['id'],
+                    'type' => $method['type'],
+                    'last4' => $method['last4'],
+                    'brand' => $method['brand'],
+                    'expiry_month' => $method['expiry_month'],
+                    'expiry_year' => $method['expiry_year'],
+                    'is_default' => $method['is_default'],
+                    'created_at' => $method['created_at']
+                ];
+            }, $methods);
+
+            return [
+                'payment_methods' => $formattedMethods
+            ];
+        }
     }
 
     /**
-     * Add payment method (placeholder)
+     * Add payment method
      */
     public function addPaymentMethod($userId, $methodData) {
-        // In a real implementation, this would save payment method with gateway
-        return [
-            'message' => 'Payment method added successfully'
-        ];
+        try {
+            // Get user and ensure they have a Stripe customer
+            $customerId = $this->createStripeCustomer($userId);
+
+            if (!$this->stripeService) {
+                throw new RuntimeException("Stripe service not available");
+            }
+
+            $gateway = $this->paymentGatewayModel->getByKey('stripe');
+            if (!$gateway || !$gateway['is_active']) {
+                throw new InvalidArgumentException("Stripe gateway not available");
+            }
+
+            // Create payment method in Stripe using test token
+            // Note: In production, this should use a token from Stripe Elements
+            $paymentMethodData = [
+                'type' => 'card',
+                'card' => [
+                    'token' => 'tok_visa' // Test token for development
+                ]
+            ];
+
+            $stripePaymentMethod = $this->stripeService->createPaymentMethod($paymentMethodData);
+
+            // Attach payment method to customer
+            $this->stripeService->attachPaymentMethodToCustomer($stripePaymentMethod['id'], $customerId);
+
+            // Save to local database
+            $localMethodData = [
+                'user_id' => $userId,
+                'gateway_id' => $gateway['id'],
+                'gateway_payment_method_id' => $stripePaymentMethod['id'],
+                'type' => 'card',
+                'last4' => $stripePaymentMethod['card']['last4'],
+                'brand' => $stripePaymentMethod['card']['brand'],
+                'expiry_month' => $stripePaymentMethod['card']['exp_month'],
+                'expiry_year' => $stripePaymentMethod['card']['exp_year'],
+                'is_default' => $methodData['is_default'] ?? false,
+                'metadata' => $stripePaymentMethod
+            ];
+
+            $localMethod = $this->paymentMethodModel->create($localMethodData);
+
+            // Set as default if requested
+            if ($methodData['is_default']) {
+                $this->paymentMethodModel->setAsDefault($localMethod['id'], $userId);
+                // Also set as default in Stripe
+                $this->stripeService->updateCustomerDefaultPaymentMethod($customerId, $stripePaymentMethod['id']);
+            }
+
+            Logger::info("Payment method added successfully", [
+                'user_id' => $userId,
+                'stripe_payment_method_id' => $stripePaymentMethod['id'],
+                'local_method_id' => $localMethod['id']
+            ]);
+
+            return [
+                'payment_method' => [
+                    'id' => $localMethod['id'],
+                    'stripe_payment_method_id' => $stripePaymentMethod['id'],
+                    'type' => $localMethod['type'],
+                    'last4' => $localMethod['last4'],
+                    'brand' => $localMethod['brand'],
+                    'expiry_month' => $localMethod['expiry_month'],
+                    'expiry_year' => $localMethod['expiry_year'],
+                    'is_default' => $localMethod['is_default'],
+                    'created_at' => $localMethod['created_at']
+                ],
+                'message' => 'Payment method added successfully'
+            ];
+
+        } catch (Exception $e) {
+            Logger::error("Failed to add payment method", [
+                'user_id' => $userId,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
     }
 
     /**
-     * Remove payment method (placeholder)
+     * Remove payment method
      */
     public function removePaymentMethod($userId, $methodId) {
-        // In a real implementation, this would remove payment method from gateway
-        return [
-            'message' => 'Payment method removed successfully'
-        ];
+        try {
+            // Get the payment method
+            $method = $this->paymentMethodModel->getById($methodId);
+
+            if (!$method || $method['user_id'] !== $userId) {
+                throw new InvalidArgumentException("Payment method not found or access denied");
+            }
+
+            if (!$this->stripeService) {
+                throw new RuntimeException("Stripe service not available");
+            }
+
+            // Detach from Stripe customer
+            $this->stripeService->detachPaymentMethod($method['gateway_payment_method_id']);
+
+            // Remove from local database
+            $this->paymentMethodModel->delete($methodId);
+
+            Logger::info("Payment method removed successfully", [
+                'user_id' => $userId,
+                'method_id' => $methodId,
+                'stripe_payment_method_id' => $method['gateway_payment_method_id']
+            ]);
+
+            return [
+                'message' => 'Payment method removed successfully'
+            ];
+
+        } catch (Exception $e) {
+            Logger::error("Failed to remove payment method", [
+                'user_id' => $userId,
+                'method_id' => $methodId,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
     }
 
     /**
@@ -322,7 +713,7 @@ class BillingService {
      * Handle webhook
      */
     public function handleWebhook($gatewayKey, $postData, $getData) {
-        Logger::info("Processing webhook", ['gateway' => $gatewayKey]);
+        Logger::info("Processing webhook", ['gateway' => $gatewayKey, 'gateway_type' => gettype($gatewayKey), 'post_data_keys' => array_keys($postData)]);
 
         switch ($gatewayKey) {
             case 'stripe':
@@ -361,6 +752,21 @@ class BillingService {
         $result = ['processed' => false, 'message' => 'Event not handled'];
 
         switch ($event['type']) {
+            case 'customer.subscription.created':
+                $subscription = $event['data']['object'];
+                $result = $this->handleSubscriptionCreated($subscription);
+                break;
+
+            case 'customer.subscription.updated':
+                $subscription = $event['data']['object'];
+                $result = $this->handleSubscriptionUpdated($subscription);
+                break;
+
+            case 'customer.subscription.deleted':
+                $subscription = $event['data']['object'];
+                $result = $this->handleSubscriptionDeleted($subscription);
+                break;
+
             case 'payment_intent.succeeded':
                 $paymentIntent = $event['data']['object'];
                 $transactionId = $paymentIntent['metadata']['transaction_id'] ?? null;
@@ -418,6 +824,125 @@ class BillingService {
         }
 
         return $result;
+    }
+
+    /**
+     * Handle subscription created webhook
+     */
+    private function handleSubscriptionCreated($stripeSubscription) {
+        Logger::info("Processing subscription created", [
+            'stripe_subscription_id' => $stripeSubscription['id'],
+            'customer_id' => $stripeSubscription['customer']
+        ]);
+
+        // Find user by Stripe customer ID
+        $userModel = new User($this->db);
+        $user = $userModel->getByStripeCustomerId($stripeSubscription['customer']);
+
+        if (!$user) {
+            Logger::error("User not found for Stripe customer", [
+                'stripe_customer_id' => $stripeSubscription['customer']
+            ]);
+            return ['processed' => false, 'message' => 'User not found'];
+        }
+
+        // Update subscription with Stripe data
+        $subscription = $this->subscriptionModel->getById(null, [
+            'stripe_subscription_id' => $stripeSubscription['id']
+        ]);
+
+        if ($subscription) {
+            $updateData = [
+                'status' => $this->mapStripeStatus($stripeSubscription['status']),
+                'current_period_start' => date('Y-m-d H:i:s', $stripeSubscription['current_period_start']),
+                'current_period_end' => date('Y-m-d H:i:s', $stripeSubscription['current_period_end']),
+                'cancel_at_period_end' => $stripeSubscription['cancel_at_period_end']
+            ];
+
+            $this->subscriptionModel->update($subscription['id'], $updateData);
+        }
+
+        return [
+            'processed' => true,
+            'message' => 'Subscription created',
+            'subscription_id' => $stripeSubscription['id']
+        ];
+    }
+
+    /**
+     * Handle subscription updated webhook
+     */
+    private function handleSubscriptionUpdated($stripeSubscription) {
+        Logger::info("Processing subscription updated", [
+            'stripe_subscription_id' => $stripeSubscription['id'],
+            'status' => $stripeSubscription['status']
+        ]);
+
+        // Find subscription by Stripe subscription ID
+        $subscription = $this->subscriptionModel->getById(null, [
+            'stripe_subscription_id' => $stripeSubscription['id']
+        ]);
+
+        if ($subscription) {
+            $updateData = [
+                'status' => $this->mapStripeStatus($stripeSubscription['status']),
+                'current_period_start' => date('Y-m-d H:i:s', $stripeSubscription['current_period_start']),
+                'current_period_end' => date('Y-m-d H:i:s', $stripeSubscription['current_period_end']),
+                'cancel_at_period_end' => $stripeSubscription['cancel_at_period_end']
+            ];
+
+            $this->subscriptionModel->update($subscription['id'], $updateData);
+        }
+
+        return [
+            'processed' => true,
+            'message' => 'Subscription updated',
+            'subscription_id' => $stripeSubscription['id']
+        ];
+    }
+
+    /**
+     * Handle subscription deleted webhook
+     */
+    private function handleSubscriptionDeleted($stripeSubscription) {
+        Logger::info("Processing subscription deleted", [
+            'stripe_subscription_id' => $stripeSubscription['id']
+        ]);
+
+        // Find subscription by Stripe subscription ID
+        $subscription = $this->subscriptionModel->getById(null, [
+            'stripe_subscription_id' => $stripeSubscription['id']
+        ]);
+
+        if ($subscription) {
+            $this->subscriptionModel->update($subscription['id'], [
+                'status' => 'cancelled',
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+        }
+
+        return [
+            'processed' => true,
+            'message' => 'Subscription deleted',
+            'subscription_id' => $stripeSubscription['id']
+        ];
+    }
+
+    /**
+     * Map Stripe subscription status to local status
+     */
+    private function mapStripeStatus($stripeStatus) {
+        $statusMap = [
+            'active' => 'active',
+            'canceled' => 'cancelled',
+            'incomplete' => 'inactive',
+            'incomplete_expired' => 'cancelled',
+            'past_due' => 'inactive',
+            'trialing' => 'active',
+            'unpaid' => 'inactive'
+        ];
+
+        return $statusMap[$stripeStatus] ?? 'inactive';
     }
 
     /**
@@ -537,6 +1062,11 @@ class BillingService {
         return $mapping[$planType] ?? 'free';
     }
 
+    private function getStripeGatewayId() {
+        $gateway = $this->paymentGatewayModel->getByKey('stripe');
+        return $gateway ? $gateway['id'] : null;
+    }
+
     private function createGatewayPaymentIntent($gatewayKey, $data) {
         switch ($gatewayKey) {
             case 'stripe':
@@ -577,7 +1107,11 @@ class BillingService {
             throw new InvalidArgumentException("Payment intent ID required");
         }
 
-        $result = $this->stripeService->confirmPaymentIntent($paymentIntentId);
+        $paymentMethodId = $data['payment_method_id'] ?? null;
+
+        // Confirm the payment intent with the payment method
+        // The payment intent already has the customer attached from creation
+        $result = $this->stripeService->confirmPaymentIntent($paymentIntentId, $paymentMethodId);
 
         return [
             'success' => $result['status'] === 'succeeded',

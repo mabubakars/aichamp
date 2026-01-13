@@ -1,4 +1,12 @@
 <?php
+// Include PHPMailer classes
+require_once __DIR__ . '/../vendor/PHPMailer/src/Exception.php';
+require_once __DIR__ . '/../vendor/PHPMailer/src/PHPMailer.php';
+require_once __DIR__ . '/../vendor/PHPMailer/src/SMTP.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
 class EmailService {
     private $fromAddress;
     private $fromName;
@@ -66,7 +74,7 @@ class EmailService {
     }
 
     /**
-     * Send email using SMTP
+     * Send email using PHPMailer
      */
     private function sendViaSmtp($to, $subject, $htmlContent, $textContent = null) {
         $host = getenv('MAIL_HOST') ?: 'localhost';
@@ -76,7 +84,7 @@ class EmailService {
         $encryption = getenv('MAIL_ENCRYPTION') ?: 'none';
 
         // Log the email attempt
-        Logger::info("Sending email via SMTP", [
+        Logger::info("Sending email via PHPMailer", [
             'to' => $to,
             'subject' => $subject,
             'from' => $this->fromAddress,
@@ -84,43 +92,69 @@ class EmailService {
             'port' => $port
         ]);
 
-        $socket = fsockopen($host, $port, $errno, $errstr, 30);
-        if (!$socket) {
-            Logger::error("SMTP connection failed", ['error' => $errstr, 'errno' => $errno]);
+        try {
+            $mail = new PHPMailer(true);
+
+            // Server settings
+            $mail->isSMTP();
+            $mail->Host = $host;
+            $mail->Port = $port;
+
+            // Authentication
+            if ($username && $password) {
+                $mail->SMTPAuth = true;
+                $mail->Username = $username;
+                $mail->Password = $password;
+            } else {
+                $mail->SMTPAuth = false;
+            }
+
+            // Encryption
+            if ($encryption === 'tls') {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            } elseif ($encryption === 'ssl') {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+            } else {
+                $mail->SMTPSecure = '';
+            }
+
+            // For localhost testing, disable certificate verification
+            if ($host === 'localhost' || $host === '127.0.0.1') {
+                $mail->SMTPOptions = [
+                    'ssl' => [
+                        'verify_peer' => false,
+                        'verify_peer_name' => false,
+                        'allow_self_signed' => true
+                    ]
+                ];
+            }
+
+            // Recipients
+            $mail->setFrom($this->fromAddress, $this->fromName);
+            $mail->addAddress($to);
+
+            // Content
+            $mail->isHTML(true);
+            $mail->Subject = $subject;
+            $mail->Body = $htmlContent;
+
+            if ($textContent) {
+                $mail->AltBody = $textContent;
+            }
+
+            $mail->send();
+
+            Logger::info("Email sent successfully via PHPMailer", ['to' => $to]);
+            return true;
+
+        } catch (Exception $e) {
+            Logger::error("Email sending failed via PHPMailer", [
+                'to' => $to,
+                'error' => $mail->ErrorInfo,
+                'exception' => $e->getMessage()
+            ]);
             return false;
         }
-
-        $this->smtpCommand($socket, "EHLO localhost\r\n");
-        if ($username && $password) {
-            $this->smtpCommand($socket, "AUTH LOGIN\r\n");
-            $this->smtpCommand($socket, base64_encode($username) . "\r\n");
-            $this->smtpCommand($socket, base64_encode($password) . "\r\n");
-        }
-        $this->smtpCommand($socket, "MAIL FROM:<{$this->fromAddress}>\r\n");
-        $this->smtpCommand($socket, "RCPT TO:<{$to}>\r\n");
-        $this->smtpCommand($socket, "DATA\r\n");
-
-        $headers = $this->buildHeaders($htmlContent, $textContent);
-        $message = $headers . "\r\n\r\n" . $htmlContent;
-        fputs($socket, $message . "\r\n.\r\n");
-        $response = fgets($socket, 512);
-
-        $this->smtpCommand($socket, "QUIT\r\n");
-        fclose($socket);
-
-        $success = strpos($response, '250') === 0;
-        if ($success) {
-            Logger::info("Email sent successfully via SMTP", ['to' => $to]);
-        } else {
-            Logger::error("Email sending failed via SMTP", ['to' => $to, 'response' => $response]);
-        }
-
-        return $success;
-    }
-
-    private function smtpCommand($socket, $command) {
-        fputs($socket, $command);
-        return fgets($socket, 512);
     }
 
     /**

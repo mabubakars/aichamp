@@ -12,9 +12,29 @@ class SubscriptionInvoice {
     public $paid_at;
     public $created_at;
 
-    public function __construct($db) {
+    public function __construct($db, $subscriptionId = null, $amount = null, $currency = 'USD', $status = 'pending') {
         $this->db = $db;
-        Logger::debug("SubscriptionInvoice model initialized");
+        
+        // Set properties if provided
+        if ($subscriptionId !== null) {
+            $this->subscription_id = $subscriptionId;
+        }
+        if ($amount !== null) {
+            $this->amount = $amount;
+        }
+        if ($currency !== null) {
+            $this->currency = $currency;
+        }
+        if ($status !== null) {
+            $this->status = $status;
+        }
+        
+        Logger::debug("SubscriptionInvoice model initialized", [
+            'subscription_id' => $subscriptionId,
+            'amount' => $amount,
+            'currency' => $currency,
+            'status' => $status
+        ]);
     }
 
     /**
@@ -432,7 +452,7 @@ class SubscriptionInvoice {
      * Validation methods
      */
     private function validateRequiredFields($data) {
-        $required = ['subscription_id', 'amount'];
+        $required = ['amount']; // subscription_id can be null for pending invoices
         foreach ($required as $field) {
             if (!isset($data[$field])) {
                 return false;

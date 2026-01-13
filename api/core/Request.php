@@ -151,5 +151,37 @@ class Request {
     public function getUser() {
         return $this->user;
     }
+
+    /**
+     * Validate JSON request body
+     * @param array $requiredFields Fields that must be present
+     * @return array|false Validation result with errors or true if valid
+     */
+    public function validateJson(array $requiredFields = []) {
+        $body = $this->getBody();
+        
+        // Check if body is valid JSON
+        if (!is_array($body)) {
+            return [
+                'valid' => false,
+                'errors' => ['Request body must be valid JSON']
+            ];
+        }
+
+        $errors = [];
+
+        // Check required fields
+        foreach ($requiredFields as $field) {
+            if (!isset($body[$field]) || $body[$field] === null || $body[$field] === '') {
+                $errors[] = "Field '{$field}' is required";
+            }
+        }
+
+        return [
+            'valid' => empty($errors),
+            'errors' => $errors,
+            'data' => $body
+        ];
+    }
 }
 ?>

@@ -7,6 +7,7 @@ class AuthService {
     public function __construct($db) {
         $this->userModel = new User($db);
         $this->validator = new Validator();
+        $this->emailVerificationService = new EmailVerificationService($db);
         $this->validateJWTService();
     }
 
@@ -82,7 +83,7 @@ class AuthService {
 
         // Send email verification
         try {
-            $this->requestEmailVerification($user['id']);
+            $this->emailVerificationService->requestVerification($user['id']);
             Logger::info("Email verification sent for new user", ['user_id' => $user['id'], 'email' => $user['email']]);
         } catch (Exception $e) {
             // Log the error but don't fail registration
@@ -306,6 +307,10 @@ class AuthService {
         $this->validator->setData($data)->rules($rules)->messages($messages);
 
         if (!$this->validator->validate()) {
+            Logger::error("Registration validation failed", [
+                'errors' => $this->validator->getErrors(),
+                'data' => $data
+            ]);
             throw new InvalidArgumentException("Validation failed");
         }
 

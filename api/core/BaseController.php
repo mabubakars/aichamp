@@ -113,14 +113,20 @@ class BaseController {
             $result = $serviceCall();
             return $this->success($result, $successMessage);
         } catch (InvalidArgumentException $e) {
-            return $this->getValidationErrorResponse();
+            // Check if there are actual validation errors
+            if (!empty($this->validator->getErrors())) {
+                return $this->getValidationErrorResponse();
+            } else {
+                // Treat as regular business logic error
+                return $this->error($e->getMessage(), 400, 'INVALID_ARGUMENT');
+            }
         } catch (Exception $e) {
             Logger::error("Service call failed", [
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine()
             ]);
-            return $this->error("Operation failed", 500, $errorCode);
+            return $this->error($e->getMessage(), 500, $errorCode);
         }
     }
 

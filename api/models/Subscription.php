@@ -13,6 +13,13 @@ class Subscription {
     public $max_models_per_prompt;
     public $features;
     public $limits;
+    public $stripe_subscription_id;
+    public $stripe_price_id;
+    public $current_period_start;
+    public $current_period_end;
+    public $cancel_at_period_end;
+    public $trial_start;
+    public $trial_end;
     public $created_at;
     public $updated_at;
 
@@ -48,7 +55,14 @@ class Subscription {
                 'max_messages_per_session' => $subscriptionData['max_messages_per_session'] ?? 100,
                 'max_models_per_prompt' => $subscriptionData['max_models_per_prompt'] ?? 1,
                 'features' => isset($subscriptionData['features']) ? json_encode($subscriptionData['features']) : null,
-                'limits' => isset($subscriptionData['limits']) ? json_encode($subscriptionData['limits']) : null
+                'limits' => isset($subscriptionData['limits']) ? json_encode($subscriptionData['limits']) : null,
+                'stripe_subscription_id' => $subscriptionData['stripe_subscription_id'] ?? null,
+                'stripe_price_id' => $subscriptionData['stripe_price_id'] ?? null,
+                'current_period_start' => $subscriptionData['current_period_start'] ?? null,
+                'current_period_end' => $subscriptionData['current_period_end'] ?? null,
+                'cancel_at_period_end' => $subscriptionData['cancel_at_period_end'] ?? false,
+                'trial_start' => $subscriptionData['trial_start'] ?? null,
+                'trial_end' => $subscriptionData['trial_end'] ?? null
             ];
 
             Logger::debug("Creating subscription", ['data' => $insertData]);
@@ -82,9 +96,64 @@ class Subscription {
     }
 
     /**
-     * Get subscription by ID
+     * Get subscription by ID or conditions
      */
-    public function getById($subscriptionId) {
+    public function getById($subscriptionId, $conditions = []) {
+        if ($subscriptionId) {
+            $conditions = ['id' => $subscriptionId];
+        }
+
+        $startTime = microtime(true);
+
+        try {
+            $subscription = $this->db->readOne($this->table_name, $conditions);
+
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+
+            if ($subscription) {
+                // Decode JSON fields
+                if ($subscription['features']) {
+                    $subscription['features'] = json_decode($subscription['features'], true);
+                }
+                if ($subscription['limits']) {
+                    $subscription['limits'] = json_decode($subscription['limits'], true);
+                }
+
+                Logger::debug("Subscription retrieved by conditions", [
+                    'conditions' => $conditions,
+                    'duration_ms' => $duration
+                ]);
+                return $subscription;
+            }
+
+            Logger::debug("Subscription not found by conditions", [
+                'conditions' => $conditions,
+                'duration_ms' => $duration
+            ]);
+            return null;
+
+        } catch (Exception $e) {
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+            Logger::error("Failed to get subscription by conditions", [
+                'error' => $e->getMessage(),
+                'conditions' => $conditions,
+                'duration_ms' => $duration
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Get subscription by Stripe subscription ID
+     */
+    public function getByStripeSubscriptionId($stripeSubscriptionId) {
+        return $this->getById(null, ['stripe_subscription_id' => $stripeSubscriptionId]);
+    }
+
+    /**
+     * Get subscription by ID (legacy method)
+     */
+    public function getByIdLegacy($subscriptionId) {
         $startTime = microtime(true);
 
         try {
@@ -249,7 +318,9 @@ class Subscription {
             // Allowed fields for update
             $allowedFields = [
                 'tier', 'status', 'context_window_size', 'max_sessions',
-                'max_messages_per_session', 'max_models_per_prompt', 'features', 'limits'
+                'max_messages_per_session', 'max_models_per_prompt', 'features', 'limits',
+                'stripe_subscription_id', 'stripe_price_id', 'current_period_start',
+                'current_period_end', 'cancel_at_period_end', 'trial_start', 'trial_end'
             ];
 
             foreach ($allowedFields as $field) {

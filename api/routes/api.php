@@ -65,6 +65,8 @@ function registerRoutes($router) {
     $router->addRoute('GET', '/billing/plans', 'Billing@getSubscriptionPlans');
     $router->addRoute('POST', '/billing/upgrade', 'Billing@upgradeSubscription');
     $router->addRoute('POST', '/billing/cancel', 'Billing@cancelSubscription');
+    $router->addRoute('POST', '/billing/stripe/subscription', 'Billing@createStripeSubscription');
+    $router->addRoute('POST', '/billing/stripe/cancel', 'Billing@cancelStripeSubscription');
     $router->addRoute('POST', '/billing/payment-intent', 'Billing@createPaymentIntent');
     $router->addRoute('POST', '/billing/process-payment', 'Billing@processPayment');
     $router->addRoute('GET', '/billing/invoices', 'Billing@getInvoices');

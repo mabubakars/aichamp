@@ -14,6 +14,7 @@ class User {
     public $is_active;
     public $is_admin;
     public $last_login_at;
+    public $stripe_customer_id;
     public $created_at;
     public $updated_at;
 
@@ -180,7 +181,7 @@ class User {
         $startTime = microtime(true);
 
         try {
-            $columns = $includeSensitive ? '*' : 'id, email, first_name, last_name, phone, avatar_url, email_verified, is_active, is_admin, last_login_at, created_at, updated_at';
+            $columns = $includeSensitive ? '*' : 'id, email, first_name, last_name, phone, avatar_url, email_verified, is_active, is_admin, last_login_at, stripe_customer_id, created_at, updated_at';
             
             $user = $this->db->readOne($this->table_name, ['id' => $userId], $columns);
             
@@ -218,7 +219,7 @@ class User {
         $startTime = microtime(true);
 
         try {
-            $columns = $includeSensitive ? '*' : 'id, email, first_name, last_name, phone, avatar_url, email_verified, is_active, is_admin, last_login_at, created_at, updated_at';
+            $columns = $includeSensitive ? '*' : 'id, email, first_name, last_name, phone, avatar_url, email_verified, is_active, is_admin, last_login_at, stripe_customer_id, created_at, updated_at';
             
             $user = $this->db->readOne($this->table_name, ['email' => $email], $columns);
             
@@ -288,7 +289,7 @@ class User {
         
         try {
             // Allowed fields for update
-            $allowedFields = ['first_name', 'last_name', 'phone', 'avatar_url'];
+            $allowedFields = ['first_name', 'last_name', 'phone', 'avatar_url', 'stripe_customer_id'];
             $filteredData = [];
             
             foreach ($allowedFields as $field) {
@@ -639,7 +640,7 @@ class User {
             $users = $this->db->readMany(
                 $this->table_name,
                 $conditions,
-                'id, email, first_name, last_name, phone, avatar_url, email_verified, is_active, is_admin, last_login_at, created_at, updated_at',
+                'id, email, first_name, last_name, phone, avatar_url, email_verified, is_active, is_admin, last_login_at, stripe_customer_id, created_at, updated_at',
                 'created_at DESC',
                 $limit,
                 $offset
@@ -690,7 +691,7 @@ class User {
             $offset = ($page - 1) * $limit;
             $searchTerm = "%{$query}%";
             
-            $sql = "SELECT id, email, first_name, last_name, phone, avatar_url, email_verified, is_active, is_admin, last_login_at, created_at, updated_at
+            $sql = "SELECT id, email, first_name, last_name, phone, avatar_url, email_verified, is_active, is_admin, last_login_at, stripe_customer_id, created_at, updated_at
                     FROM {$this->table_name}
                     WHERE (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)
                     AND is_active = true
@@ -827,6 +828,86 @@ class User {
     }
 
     /**
+     * Update user Stripe customer ID
+     */
+    public function updateStripeCustomerId($userId, $stripeCustomerId) {
+        $startTime = microtime(true);
+
+        try {
+            $updateData = [
+                'stripe_customer_id' => $stripeCustomerId,
+                'updated_at' => date('Y-m-d H:i:s')
+            ];
+
+            $affectedRows = $this->db->update($this->table_name, $updateData, ['id' => $userId]);
+
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+
+            if ($affectedRows > 0) {
+                Logger::info("Stripe customer ID updated successfully", [
+                    'user_id' => $userId,
+                    'stripe_customer_id' => $stripeCustomerId,
+                    'duration_ms' => $duration
+                ]);
+                return true;
+            }
+
+            Logger::warning("Stripe customer ID update affected no rows", [
+                'user_id' => $userId,
+                'duration_ms' => $duration
+            ]);
+            return false;
+
+        } catch (Exception $e) {
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+            Logger::error("Stripe customer ID update failed", [
+                'error' => $e->getMessage(),
+                'user_id' => $userId,
+                'duration_ms' => $duration
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Get user by Stripe customer ID
+     */
+    public function getByStripeCustomerId($stripeCustomerId, $includeSensitive = false) {
+        $startTime = microtime(true);
+
+        try {
+            $columns = $includeSensitive ? '*' : 'id, email, first_name, last_name, phone, avatar_url, email_verified, is_active, is_admin, last_login_at, stripe_customer_id, created_at, updated_at';
+
+            $user = $this->db->readOne($this->table_name, ['stripe_customer_id' => $stripeCustomerId], $columns);
+
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+
+            if ($user) {
+                Logger::debug("User retrieved by Stripe customer ID", [
+                    'stripe_customer_id' => $stripeCustomerId,
+                    'duration_ms' => $duration
+                ]);
+                return $user;
+            }
+
+            Logger::debug("User not found by Stripe customer ID", [
+                'stripe_customer_id' => $stripeCustomerId,
+                'duration_ms' => $duration
+            ]);
+            return null;
+
+        } catch (Exception $e) {
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+            Logger::error("Failed to get user by Stripe customer ID", [
+                'error' => $e->getMessage(),
+                'stripe_customer_id' => $stripeCustomerId,
+                'duration_ms' => $duration
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
      * Create users table
      */
     public static function createTable($db) {
@@ -843,13 +924,15 @@ class User {
                 avatar_url TEXT,
                 email_verified BOOLEAN DEFAULT FALSE,
                 is_active BOOLEAN DEFAULT TRUE,
+                is_admin BOOLEAN DEFAULT FALSE,
                 last_login_at TIMESTAMP NULL,
+                stripe_customer_id VARCHAR(255) UNIQUE NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_users_is_admin (is_admin),
                 INDEX idx_users_email (email),
                 INDEX idx_users_created_at (created_at),
-                INDEX idx_users_is_active (is_active),
-                INDEX idx_users_email_verified (email_verified)
+                INDEX idx_users_stripe_customer_id (stripe_customer_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
             Logger::debug("Creating users table if not exists");

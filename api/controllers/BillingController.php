@@ -64,6 +64,39 @@ class BillingController extends BaseController {
     }
 
     /**
+     * Create Stripe subscription
+     */
+    public function createStripeSubscription() {
+        $user = $this->getAuthenticatedUser();
+            $data = $this->getJsonInput();
+
+            return $this->handleServiceCall(function() use ($user, $data) {
+                $result = $this->billingService->createStripeSubscription(
+                    $user['user_id'],
+                    $data['plan_id'],
+                    $data['payment_method_id'] ?? null
+                );
+                return $result;
+            }, "Stripe subscription created successfully.", 'STRIPE_SUBSCRIPTION_CREATION_FAILED');
+    }
+
+    /**
+     * Cancel Stripe subscription
+     */
+    public function cancelStripeSubscription() {
+        $user = $this->getAuthenticatedUser();
+            $data = $this->getJsonInput();
+
+            return $this->handleServiceCall(function() use ($user, $data) {
+                $result = $this->billingService->cancelStripeSubscription(
+                    $user['user_id'],
+                    $data['cancel_at_period_end'] ?? true
+                );
+                return $result;
+            }, "Stripe subscription cancelled successfully.", 'STRIPE_SUBSCRIPTION_CANCEL_FAILED');
+    }
+
+    /**
      * Create payment intent for subscription
      */
     public function createPaymentIntent() {
@@ -173,7 +206,16 @@ class BillingController extends BaseController {
     /**
      * Webhook handler for payment confirmations
      */
-    public function handleWebhook($gatewayKey) {
+    public function handleWebhook() {
+        $uri = $_SERVER['REQUEST_URI'];
+        if (strpos($uri, '/webhooks/stripe') !== false) {
+            $gatewayKey = 'stripe';
+        } elseif (strpos($uri, '/webhooks/paypal') !== false) {
+            $gatewayKey = 'paypal';
+        } else {
+            $gatewayKey = null;
+        }
+
         try {
             $result = $this->billingService->handleWebhook($gatewayKey, $_POST, $_GET);
             return $this->success($result, "Webhook processed successfully.");

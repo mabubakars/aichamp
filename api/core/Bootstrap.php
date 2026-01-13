@@ -38,7 +38,13 @@ class Bootstrap {
     }
 
     private static function initializeCoreComponents() {
-        // Register autoloader first
+        // Load composer autoload first
+        $autoloadPath = __DIR__ . '/../vendor/autoload.php';
+        if (file_exists($autoloadPath)) {
+            require_once $autoloadPath;
+        }
+
+        // Register autoloader
         require_once __DIR__ . '/Autoloader.php';
         Autoloader::register();
 
