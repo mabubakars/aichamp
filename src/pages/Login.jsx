@@ -1,7 +1,7 @@
-// src/pages/Login.js
+
 import { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { toast } from "react-toastify"; // ✅ Import toast
+import { toast } from "react-toastify"; 
 import "../styles/auth.css";
 import { authService } from "../services/authService";
 import { AuthContext } from "../guards/context/AuthContext";
