@@ -41,6 +41,20 @@
   line-height: 1.6;
 }
 
+.current-plan-info {
+  margin-top: 1rem;
+}
+
+.current-plan-badge {
+  background: var(--navy);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
 .plans-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

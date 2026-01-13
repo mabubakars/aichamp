@@ -26,7 +26,7 @@ const StripePaymentForm = ({ plan, onBack, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!stripe || !elements) {
       return;
     }
@@ -35,26 +35,36 @@ const StripePaymentForm = ({ plan, onBack, onSuccess }) => {
     setError(null);
 
     try {
-      const paymentMethodResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL}billing/payment-methods`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json',
+      // Step 1: Create payment method using Stripe Elements
+      const cardElement = elements.getElement(CardElement);
+      const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod({
+        type: 'card',
+        card: cardElement,
+        billing_details: {
+          name: e.target[0].value, // Full name from form
+          email: e.target[1].value, // Email from form
         },
-        body: JSON.stringify({
-          is_default: true
-        }),
       });
 
-      const paymentMethodData = await paymentMethodResponse.json();
-
-      if (!paymentMethodResponse.ok) {
-        setError(paymentMethodData.message || 'Failed to create payment method');
+      if (stripeError) {
+        setError(stripeError.message);
         setLoading(false);
         return;
       }
 
-      const paymentMethod = paymentMethodData;
+      // Step 2: Send payment method to backend
+      const paymentMethodResponse = await apiClient.post('billing/payment-methods', {
+        payment_method_id: paymentMethod.id,
+        is_default: true
+      });
+
+      if (!paymentMethodResponse.ok) {
+        setError(paymentMethodResponse.data?.message || 'Failed to attach payment method');
+        setLoading(false);
+        return;
+      }
+
+      // Step 3: Create payment intent
       const paymentIntentResponse = await apiClient.post('billing/payment-intent', {
         plan_id: plan.id,
         gateway_key: 'stripe'
@@ -75,27 +85,26 @@ const StripePaymentForm = ({ plan, onBack, onSuccess }) => {
         return;
       }
 
-      const paymentIntent = await stripe.retrievePaymentIntent(client_secret);
+      // Step 4: Confirm payment intent
+      const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(client_secret, {
+        payment_method: paymentMethod.id,
+      });
 
-      if (paymentIntent.error) {
-        setError(paymentIntent.error.message);
+      if (confirmError) {
+        setError(confirmError.message);
         setLoading(false);
         return;
       }
 
-      const processPaymentResponse = await apiClient.post(
-        'billing/process-payment',
-        {
-          transaction_id: transaction_id,
-          payment_intent_id: paymentIntent?.paymentIntent?.id,
-          payment_method_id: paymentMethod?.data?.payment_method?.id,
-        }
-      );
+      // Step 5: Process payment on backend
+      const processPaymentResponse = await apiClient.post('billing/process-payment', {
+        transaction_id: transaction_id,
+        payment_intent_id: paymentIntent.id,
+        payment_method_id: paymentMethod.id,
+      });
 
-      const processPaymentData = processPaymentResponse.data;
-
-      if (!processPaymentData.success) {
-        setError(processPaymentData.message || 'Payment processing failed');
+      if (!processPaymentResponse.ok) {
+        setError(processPaymentResponse.data?.message || 'Payment processing failed');
         setLoading(false);
         return;
       }

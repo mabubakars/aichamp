@@ -592,30 +592,38 @@ class BillingService {
                 throw new InvalidArgumentException("Stripe gateway not available");
             }
 
-            // Create payment method in Stripe using test token
-            // Note: In production, this should use a token from Stripe Elements
-            $paymentMethodData = [
-                'type' => 'card',
-                'card' => [
-                    'token' => 'tok_visa' // Test token for development
-                ]
-            ];
+            $paymentMethodId = $methodData['payment_method_id'] ?? null;
+            if (!$paymentMethodId) {
+                throw new InvalidArgumentException("Payment method ID is required");
+            }
 
-            $stripePaymentMethod = $this->stripeService->createPaymentMethod($paymentMethodData);
+            // Attach existing payment method to customer
+            $this->stripeService->attachPaymentMethodToCustomer($paymentMethodId, $customerId);
 
-            // Attach payment method to customer
-            $this->stripeService->attachPaymentMethodToCustomer($stripePaymentMethod['id'], $customerId);
+            // Get payment method details from Stripe
+            $paymentMethods = $this->stripeService->getPaymentMethods($customerId);
+            $stripePaymentMethod = null;
+            foreach ($paymentMethods as $method) {
+                if ($method['id'] === $paymentMethodId) {
+                    $stripePaymentMethod = $method;
+                    break;
+                }
+            }
+
+            if (!$stripePaymentMethod) {
+                throw new RuntimeException("Failed to retrieve payment method details from Stripe");
+            }
 
             // Save to local database
             $localMethodData = [
                 'user_id' => $userId,
                 'gateway_id' => $gateway['id'],
                 'gateway_payment_method_id' => $stripePaymentMethod['id'],
-                'type' => 'card',
-                'last4' => $stripePaymentMethod['card']['last4'],
-                'brand' => $stripePaymentMethod['card']['brand'],
-                'expiry_month' => $stripePaymentMethod['card']['exp_month'],
-                'expiry_year' => $stripePaymentMethod['card']['exp_year'],
+                'type' => $stripePaymentMethod['type'],
+                'last4' => $stripePaymentMethod['card']['last4'] ?? null,
+                'brand' => $stripePaymentMethod['card']['brand'] ?? null,
+                'expiry_month' => $stripePaymentMethod['card']['exp_month'] ?? null,
+                'expiry_year' => $stripePaymentMethod['card']['exp_year'] ?? null,
                 'is_default' => $methodData['is_default'] ?? false,
                 'metadata' => $stripePaymentMethod
             ];
@@ -1107,16 +1115,51 @@ class BillingService {
             throw new InvalidArgumentException("Payment intent ID required");
         }
 
-        $paymentMethodId = $data['payment_method_id'] ?? null;
+        // Retrieve the payment intent to check its status
+        // Note: The payment intent should already be confirmed by the frontend
+        try {
+            $paymentIntent = \Stripe\PaymentIntent::retrieve($paymentIntentId);
 
-        // Confirm the payment intent with the payment method
-        // The payment intent already has the customer attached from creation
-        $result = $this->stripeService->confirmPaymentIntent($paymentIntentId, $paymentMethodId);
+            Logger::info("Retrieved payment intent for processing", [
+                'payment_intent_id' => $paymentIntentId,
+                'status' => $paymentIntent->status,
+                'amount' => $paymentIntent->amount,
+                'currency' => $paymentIntent->currency
+            ]);
 
-        return [
-            'success' => $result['status'] === 'succeeded',
-            'gateway_transaction_id' => $result['charge_id'] ?? $result['id']
-        ];
+            // Check if payment intent is in a successful state
+            $success = in_array($paymentIntent->status, ['succeeded', 'processing']);
+
+            if (!$success && $paymentIntent->status === 'requires_confirmation') {
+                // If it still needs confirmation, try to confirm it (fallback)
+                Logger::warning("Payment intent still requires confirmation, attempting to confirm", [
+                    'payment_intent_id' => $paymentIntentId
+                ]);
+
+                $paymentMethodId = $data['payment_method_id'] ?? null;
+                $result = $this->stripeService->confirmPaymentIntent($paymentIntentId, $paymentMethodId);
+                $success = $result['status'] === 'succeeded';
+                $gatewayTransactionId = $result['charge_id'] ?? $result['id'];
+            } else {
+                $gatewayTransactionId = $paymentIntent->latest_charge ?? $paymentIntent->id;
+            }
+
+            return [
+                'success' => $success,
+                'gateway_transaction_id' => $gatewayTransactionId
+            ];
+
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            Logger::error("Failed to retrieve payment intent", [
+                'payment_intent_id' => $paymentIntentId,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
     }
 
     private function createPayPalPaymentIntent($data) {

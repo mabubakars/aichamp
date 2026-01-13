@@ -27,8 +27,6 @@ const Dashboard = ({
   const { token } = useContext(AuthContext);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const bottomRefs = useRef({});
-
   useEffect(() => {
     const load = async () => {
       if (sessionData && sessionModels?.length > 0) {

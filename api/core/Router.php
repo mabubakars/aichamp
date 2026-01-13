@@ -32,6 +32,12 @@ class Router {
             $request_method = $this->request->getMethod();
             $request_uri = $this->request->getUri();
 
+            // Handle OPTIONS requests for CORS preflight
+            if ($request_method === 'OPTIONS') {
+                $this->response->setStatusCode(200)->send();
+                return;
+            }
+
             // Only strip '/api' prefix if the URI starts with '/api/'
             if (strpos($request_uri, '/api/') === 0) {
                 $path = substr($request_uri, 4); // Remove '/api' prefix
