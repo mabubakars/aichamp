@@ -5,7 +5,7 @@
 CREATE DATABASE IF NOT EXISTS ai_chat_platform CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE ai_chat_platform;
 
--- 1. Users Table (unchanged)
+-- 1. Users Table (updated with Stripe integration)
 CREATE TABLE users (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -18,11 +18,13 @@ CREATE TABLE users (
     is_active BOOLEAN DEFAULT TRUE,
     is_admin BOOLEAN DEFAULT FALSE,
     last_login_at TIMESTAMP NULL,
+    stripe_customer_id VARCHAR(255) UNIQUE NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_users_is_admin (is_admin),
     INDEX idx_users_email (email),
-    INDEX idx_users_created_at (created_at)
+    INDEX idx_users_created_at (created_at),
+    INDEX idx_users_stripe_customer_id (stripe_customer_id)
 );
 
 -- 2. Organizations Table (unchanged)
@@ -77,7 +79,7 @@ CREATE TABLE subscription_plans (
     INDEX idx_plans_active (is_active)
 );
 
--- 5. Enhanced Subscriptions Table
+-- 5. Enhanced Subscriptions Table (with Stripe integration)
 CREATE TABLE subscriptions (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     user_id CHAR(36) NOT NULL,
@@ -89,12 +91,22 @@ CREATE TABLE subscriptions (
     max_models_per_prompt INT DEFAULT 1, -- NEW: Limit number of models per prompt
     features JSON,
     limits JSON,
+    stripe_subscription_id VARCHAR(255) UNIQUE NULL,
+    stripe_price_id VARCHAR(255) NULL,
+    current_period_start TIMESTAMP NULL,
+    current_period_end TIMESTAMP NULL,
+    cancel_at_period_end BOOLEAN DEFAULT FALSE,
+    trial_start TIMESTAMP NULL,
+    trial_end TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_subscriptions_user_id (user_id),
     INDEX idx_subscriptions_tier (tier),
-    INDEX idx_subscriptions_status (status)
+    INDEX idx_subscriptions_status (status),
+    INDEX idx_subscriptions_stripe_subscription_id (stripe_subscription_id),
+    INDEX idx_subscriptions_stripe_price_id (stripe_price_id),
+    INDEX idx_subscriptions_current_period_end (current_period_end)
 );
 
 -- 6. Subscription Invoices Table (unchanged)
@@ -115,9 +127,8 @@ CREATE TABLE subscription_invoices (
 -- 7. AI Models Table (enhanced)
 CREATE TABLE ai_models (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
-    name VARCHAR(255) NOT NULL,
-    provider VARCHAR(100) NOT NULL,
     model_name VARCHAR(255) NOT NULL,
+    provider VARCHAR(100) NOT NULL,
     description TEXT,
     context_length INT,
     is_active BOOLEAN DEFAULT TRUE,
@@ -450,7 +461,30 @@ CREATE TABLE payment_gateways (
     INDEX idx_gateways_active (is_active)
 );
 
--- 24. Payment Transactions Table
+-- 24. Payment Methods Table
+CREATE TABLE payment_methods (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    user_id CHAR(36) NOT NULL,
+    gateway_id CHAR(36) NOT NULL,
+    gateway_payment_method_id VARCHAR(255) NOT NULL,
+    type VARCHAR(50) NOT NULL, -- card, bank_account, etc.
+    last4 VARCHAR(4),
+    brand VARCHAR(50), -- visa, mastercard, etc.
+    expiry_month INT,
+    expiry_year INT,
+    is_default BOOLEAN DEFAULT FALSE,
+    metadata JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (gateway_id) REFERENCES payment_gateways(id),
+    UNIQUE KEY unique_gateway_method (gateway_id, gateway_payment_method_id),
+    INDEX idx_payment_methods_user_id (user_id),
+    INDEX idx_payment_methods_gateway_id (gateway_id),
+    INDEX idx_payment_methods_default (user_id, is_default)
+);
+
+-- 25. Payment Transactions Table
 CREATE TABLE payment_transactions (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     user_id CHAR(36) NULL,
@@ -508,6 +542,7 @@ CREATE TABLE email_verifications (
     user_id CHAR(36) NOT NULL,
     email VARCHAR(255) NOT NULL,
     token_hash VARCHAR(255) NOT NULL,
+    token VARCHAR(255) NULL,
     token_type VARCHAR(20) DEFAULT 'verification',
     expires_at TIMESTAMP NOT NULL,
     used_at TIMESTAMP NULL,
@@ -539,10 +574,10 @@ SELECT
     up.topic,
     up.sentiment,
     COUNT(DISTINCT ar.id) as response_count,
-    GROUP_CONCAT(DISTINCT am.name ORDER BY sm.display_order) as model_names,
-    GROUP_CONCAT(DISTINCT 
+    GROUP_CONCAT(DISTINCT am.model_name ORDER BY sm.display_order) as model_names,
+    GROUP_CONCAT(DISTINCT
         CONCAT(
-            am.name, ':', 
+            am.model_name, ':',
             CASE WHEN ar.is_visible THEN 'visible' ELSE 'hidden' END
         )
         ORDER BY sm.display_order
@@ -561,7 +596,7 @@ SELECT
     cs.id as session_id,
     cs.title as session_title,
     sm.model_id,
-    am.name as model_name,
+    am.model_name as model_name,
     am.provider,
     sm.is_enabled,
     sm.is_visible,
@@ -584,7 +619,7 @@ SELECT
     up.created_at as prompt_time,
     ar.id as response_id,
     ar.model_id,
-    am.name as model_name,
+    am.model_name as model_name,
     ar.content as response_content,
     ar.confidence_score,
     ar.generation_time_ms,
@@ -595,7 +630,7 @@ SELECT
 FROM user_prompts up
 LEFT JOIN ai_responses ar ON up.id = ar.prompt_id
 LEFT JOIN ai_models am ON ar.model_id = am.id
-ORDER BY up.created_at, am.name;
+ORDER BY up.created_at, am.model_name;
 
 -- Stored Procedures for Multi-Model Operations
 
@@ -739,7 +774,7 @@ BEGIN
             JSON_OBJECT(
                 'response_id', ar.id,
                 'model_id', ar.model_id,
-                'model_name', am.name,
+                'model_name', am.model_name,
                 'content', ar.content,
                 'confidence_score', ar.confidence_score,
                 'is_visible', ar.is_visible,
@@ -754,11 +789,11 @@ BEGIN
     GROUP BY up.id, up.content, up.created_at, up.topic, up.sentiment
     ORDER BY up.created_at DESC
     LIMIT p_limit OFFSET p_offset;
-    
+
     -- Get session models info
     SELECT
         sm.model_id,
-        am.name as model_name,
+        am.model_name as model_name,
         am.provider,
         sm.is_enabled,
         sm.is_visible,
@@ -876,7 +911,7 @@ DO
 -- Insert Default Data
 
 -- Insert default AI models
-INSERT INTO ai_models (id, name, provider, description, context_length, display_name, display_order, is_default, capabilities) VALUES
+INSERT INTO ai_models (id, model_name, provider, description, context_length, display_name, display_order, is_default, capabilities) VALUES
 (UUID(), 'deepseek-r1:7b', 'ollama', 'DeepSeek R1 7B model', 32768, 'DeepSeek R1', 1, TRUE, '["text", "reasoning"]'),
 (UUID(), 'llama3.1:8b', 'ollama', 'Llama 3.1 8B model', 131072, 'Llama 3.1', 2, FALSE, '["text"]'),
 (UUID(), 'DeepSeek: R1 0528', 'openrouter', 'DeepSeek R1 model', 128000, 'DeepSeek: R1 0528', 3, FALSE, '["text", "vision"]');
