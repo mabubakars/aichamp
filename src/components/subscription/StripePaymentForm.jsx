@@ -52,7 +52,6 @@ const StripePaymentForm = ({ plan, onBack, onSuccess }) => {
         return;
       }
 
-      // Step 2: Send payment method to backend
       const paymentMethodResponse = await apiClient.post('billing/payment-methods', {
         payment_method_id: paymentMethod.id,
         is_default: true
@@ -64,7 +63,6 @@ const StripePaymentForm = ({ plan, onBack, onSuccess }) => {
         return;
       }
 
-      // Step 3: Create payment intent
       const paymentIntentResponse = await apiClient.post('billing/payment-intent', {
         plan_id: plan.id,
         gateway_key: 'stripe'
