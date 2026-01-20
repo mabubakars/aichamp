@@ -233,7 +233,15 @@ const Dashboard = ({
     }
   };
 
-  if (loading) return <p style={{ padding: "20px" }}>Loading dashboard...</p>;
+  if (loading) return (
+    <div style={{ padding: "20px", display: "flex", justifyContent: "center", alignItems: "center", height: "50vh" }}>
+      <div className="dot-loader">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>
+  );
 
   return (
     <main className="dashboard">
