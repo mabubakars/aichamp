@@ -21,7 +21,7 @@ const Dashboard = ({
   const [models, setModels] = useState([]);
   const [messages, setMessages] = useState({});
   const [loadingModels, setLoadingModels] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const sessionId = sessionData?.id || null;
   const bottomRefs = useRef({});
@@ -30,7 +30,6 @@ const Dashboard = ({
 
   useEffect(() => {
     const load = async () => {
-      setLoading(true);
       if (sessionData && sessionModels?.length > 0) {
         const mappedModels = sessionModels.map((m) => ({
           id: m.model_id,
@@ -74,6 +73,7 @@ const Dashboard = ({
       }
 
       if (!sessionData) {
+        setLoading(true);
         const res = await chatService.getModels();
         if (!res.ok) {
           setLoading(false);
@@ -233,7 +233,7 @@ const Dashboard = ({
     }
   };
 
-  if (loading) return <p style={{ padding: "20px" }}>Loading modoels...</p>;
+  if (loading) return <p style={{ padding: "20px" }}>Loading dashboard...</p>;
 
   return (
     <main className="dashboard">
