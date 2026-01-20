@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { authService } from "../services/authService";
 import "../styles/auth.css";
-import Loader from "../components/Common/Loader";
 
 const Profile = () => {
   const [form, setForm] = useState({
@@ -71,7 +70,7 @@ useEffect(() => {
     setSuccess("Profile updated successfully.");
   };
 
-  if (fetching) return <Loader message="Loading profile..." />;
+  if (fetching) return <p style={{ padding: "20px" }}>Loading profile...</p>;
 
   return (
     <div className="page active">

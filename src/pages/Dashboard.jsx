@@ -9,7 +9,6 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { duotoneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useContext } from "react";
 import { AuthContext } from "../guards/context/AuthContext";
-import Loader from "../components/Common/Loader";
 const Dashboard = ({
   sessionData,
   sessionMessages,
@@ -22,7 +21,6 @@ const Dashboard = ({
   const [models, setModels] = useState([]);
   const [messages, setMessages] = useState({});
   const [loadingModels, setLoadingModels] = useState({});
-  const [initialLoading, setInitialLoading] = useState(true);
 
   const sessionId = sessionData?.id || null;
   const bottomRefs = useRef({});
@@ -93,7 +91,7 @@ const Dashboard = ({
       }
     };
 
-    load().finally(() => setInitialLoading(false));
+    load();
   }, [sessionData, sessionModels, sessionMessages]);
 
   useEffect(() => {
@@ -154,8 +152,6 @@ const Dashboard = ({
     text.trim().split(/\s+/).slice(0, 3).join(" ");
 
   const isSending = Object.values(loadingModels).some(Boolean);
-
-  if (initialLoading) return <Loader message="Loading models..." />;
 
   const handleSubmit = async () => {
     if (!prompt.trim() || isSending) return;
