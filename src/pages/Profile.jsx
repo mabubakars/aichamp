@@ -71,7 +71,7 @@ useEffect(() => {
   };
 
   if (fetching) return (
-    <div style={{ padding: "20px", display: "flex", justifyContent: "center", alignItems: "center", height: "50vh" }}>
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
       <div className="dot-loader">
         <span></span>
         <span></span>
