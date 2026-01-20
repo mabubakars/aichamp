@@ -5,6 +5,7 @@ import SuccessMessage from "../components/subscription/SuccessMessage";
 import { getPaymentPlans, getCurrentSubscription } from "../services/paymentPlanService";
 import StripeProvider from "../components/subscription/StripeProvider";
 import StripePaymentForm from "../components/subscription/StripePaymentForm";
+import { useNavigate } from "react-router-dom";
 
 const UpgradePlan = () => {
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -14,8 +15,7 @@ const UpgradePlan = () => {
   const [showPayment, setShowPayment] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(null);
   const [currentSubscription, setCurrentSubscription] = useState(null);
-
-  // Define tier hierarchy (lower number = lower tier)
+  const navigate = useNavigate();
   const tierHierarchy = {
     'free': 0,
     'basic': 1,
@@ -27,12 +27,9 @@ const UpgradePlan = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch current subscription
         const subscriptionResponse = await getCurrentSubscription();
         const currentSub = subscriptionResponse.data;
         setCurrentSubscription(currentSub);
-
-        // Fetch plans
         const plansResponse = await getPaymentPlans();
         const plansData = plansResponse.data.plans.map(plan => ({
           id: plan.id,
@@ -55,14 +52,12 @@ const UpgradePlan = () => {
           ],
         }));
 
-        // Filter plans based on current subscription
         const currentTierLevel = tierHierarchy[currentSub.tier] || 0;
         const filteredPlans = plansData.filter(plan => {
           const planTierLevel = tierHierarchy[plan.plan_type] || 0;
           return planTierLevel > currentTierLevel;
         });
 
-        // Mark current plan as disabled if it's still in the list
         const plansWithDisabled = filteredPlans.map(plan => ({
           ...plan,
           disabled: plan.plan_type === currentSub.tier
@@ -93,7 +88,7 @@ const UpgradePlan = () => {
   }, []);
 
   return (
-    <div className="subscription-page"> {/* ✅ SIDEBAR SAFE */}
+    <div className="subscription-page">
       <div className="subscription-container">
 
         <div className="subscription-header">
@@ -169,6 +164,7 @@ const UpgradePlan = () => {
               setPaymentSuccess(null);
               setShowPayment(false);
               setSelectedPlan(null);
+              navigate("/dashboard");
             }}
           />
         )}

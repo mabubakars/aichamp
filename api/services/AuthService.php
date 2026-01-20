@@ -128,8 +128,9 @@ class AuthService {
             'password.required' => 'Password is required.'
         ];
 
+        
         $this->validator->setData($data)->rules($rules)->messages($messages);
-
+        
         if (!$this->validator->validate()) {
             throw new InvalidArgumentException("Validation failed");
         }
