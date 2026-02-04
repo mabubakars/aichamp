@@ -25,7 +25,7 @@ CREATE TABLE users (
     INDEX idx_users_email (email),
     INDEX idx_users_created_at (created_at),
     INDEX idx_users_stripe_customer_id (stripe_customer_id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2. Organizations Table (unchanged)
 CREATE TABLE organizations (
