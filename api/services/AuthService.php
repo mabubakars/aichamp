@@ -3,6 +3,7 @@ class AuthService {
     private $userModel;
     private $validator;
     private $jwtService;
+    private $emailVerificationService;
 
     public function __construct($db) {
         $this->userModel = new User($db);
