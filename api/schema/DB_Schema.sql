@@ -25,7 +25,7 @@ CREATE TABLE users (
     INDEX idx_users_email (email),
     INDEX idx_users_created_at (created_at),
     INDEX idx_users_stripe_customer_id (stripe_customer_id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2. Organizations Table (unchanged)
 CREATE TABLE organizations (
@@ -42,7 +42,7 @@ CREATE TABLE organizations (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_organizations_slug (slug),
     INDEX idx_organizations_created_by (created_by)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3. Organization Members Table (unchanged)
 CREATE TABLE organization_members (
@@ -61,7 +61,7 @@ CREATE TABLE organization_members (
     UNIQUE KEY unique_organization_user (organization_id, user_id),
     INDEX idx_org_members_user_id (user_id),
     INDEX idx_org_members_org_id (organization_id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 4. Subscription Plans Table (unchanged)
 CREATE TABLE subscription_plans (
@@ -77,7 +77,7 @@ CREATE TABLE subscription_plans (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_plans_type (plan_type),
     INDEX idx_plans_active (is_active)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 5. Enhanced Subscriptions Table (with Stripe integration)
 CREATE TABLE subscriptions (
@@ -107,7 +107,7 @@ CREATE TABLE subscriptions (
     INDEX idx_subscriptions_stripe_subscription_id (stripe_subscription_id),
     INDEX idx_subscriptions_stripe_price_id (stripe_price_id),
     INDEX idx_subscriptions_current_period_end (current_period_end)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 6. Subscription Invoices Table (unchanged)
 CREATE TABLE subscription_invoices (
@@ -122,7 +122,7 @@ CREATE TABLE subscription_invoices (
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id),
     INDEX idx_invoices_status (status),
     INDEX idx_invoices_due_date (due_date)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 7. AI Models Table (enhanced)
 CREATE TABLE ai_models (
@@ -145,7 +145,7 @@ CREATE TABLE ai_models (
     INDEX idx_models_display_order (display_order),
     INDEX idx_models_is_default (is_default),
     INDEX idx_models_created_at (created_at)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 8. Enhanced Chat Sessions Table
 CREATE TABLE chat_sessions (
@@ -180,7 +180,7 @@ CREATE TABLE chat_sessions (
     INDEX idx_chat_sessions_is_active_last_message (is_active, last_message_at),
     INDEX idx_chat_sessions_version (version),
     INDEX idx_chat_sessions_user_active (user_id, is_active, last_message_at)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 9. SESSION MODELS TABLE (CORE FOR MULTI-MODEL SUPPORT)
 -- Tracks which models are enabled for a specific session
@@ -205,7 +205,7 @@ CREATE TABLE session_models (
     INDEX idx_session_models_visible (is_visible),
     INDEX idx_session_models_session_enabled (session_id, is_enabled, is_visible),
     INDEX idx_session_models_display_order (session_id, display_order)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 10. USER PROMPTS TABLE (CORE)
 -- Stores user prompts independently of responses
@@ -232,7 +232,7 @@ CREATE TABLE user_prompts (
     INDEX idx_user_prompts_topic_category (topic, category),
     INDEX idx_user_prompts_sentiment (sentiment),
     INDEX idx_user_prompts_session_created (session_id, created_at)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 11. AI RESPONSES TABLE (CORE)
 -- Stores responses from AI models, linked to prompts
@@ -264,7 +264,7 @@ CREATE TABLE ai_responses (
     INDEX idx_ai_responses_visible (is_visible),
     INDEX idx_ai_responses_preferred (is_preferred),
     INDEX idx_ai_responses_prompt_model (prompt_id, model_id, is_visible)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 12. MESSAGE THREADS TABLE (Optional, for grouping prompts/responses)
 -- Useful for complex conversation flows
@@ -280,7 +280,7 @@ CREATE TABLE message_threads (
     FOREIGN KEY (parent_prompt_id) REFERENCES user_prompts(id) ON DELETE SET NULL,
     INDEX idx_message_threads_session_id (session_id),
     INDEX idx_message_threads_parent_prompt (parent_prompt_id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 13. Thinking Traces Table
 CREATE TABLE thinking_traces (
@@ -303,7 +303,7 @@ CREATE TABLE thinking_traces (
     INDEX idx_thinking_traces_type (trace_type),
     INDEX idx_thinking_traces_sequence (session_id, sequence_order),
     INDEX idx_thinking_traces_user_session (user_id, session_id, created_at)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 14. User Drafts Table
 CREATE TABLE user_drafts (
@@ -321,7 +321,7 @@ CREATE TABLE user_drafts (
     INDEX idx_user_drafts_user_id (user_id),
     INDEX idx_user_drafts_session_id (session_id),
     INDEX idx_user_drafts_active (user_id, is_active)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 15. Conversation Metadata Table
 CREATE TABLE conversation_metadata (
@@ -338,7 +338,7 @@ CREATE TABLE conversation_metadata (
     INDEX idx_conversation_metadata_session_id (session_id),
     INDEX idx_conversation_metadata_category (category),
     INDEX idx_conversation_metadata_priority (priority)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 16. Response Feedback Table
 CREATE TABLE response_feedback (
@@ -356,7 +356,7 @@ CREATE TABLE response_feedback (
     INDEX idx_response_feedback_response_id (response_id),
     INDEX idx_response_feedback_user_id (user_id),
     INDEX idx_response_feedback_rating (rating)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- REMOVED: Response Comparisons Table (was table 17)
 
@@ -376,7 +376,7 @@ CREATE TABLE model_performance_metrics (
     INDEX idx_model_performance_model_id (model_id),
     INDEX idx_model_performance_response_id (response_id),
     INDEX idx_model_performance_created_at (created_at)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 19. Vector Memories Table
 CREATE TABLE vector_memories (
@@ -396,7 +396,7 @@ CREATE TABLE vector_memories (
     INDEX idx_vector_memories_role (role),
     INDEX idx_vector_memories_created_at (created_at),
     INDEX idx_vector_memories_session_created (session_id, created_at)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 20. Background Jobs Table
 CREATE TABLE background_jobs (
@@ -417,7 +417,7 @@ CREATE TABLE background_jobs (
     INDEX idx_background_jobs_priority (priority),
     INDEX idx_background_jobs_scheduled_at (scheduled_at),
     INDEX idx_background_jobs_type (job_type)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 21. Performance Metrics Table
 CREATE TABLE performance_metrics (
@@ -431,7 +431,7 @@ CREATE TABLE performance_metrics (
     INDEX idx_performance_metrics_timestamp (timestamp),
     INDEX idx_performance_metrics_slow (is_slow),
     INDEX idx_performance_metrics_operation_timestamp (operation, timestamp)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 22. Audit Logs Table
 CREATE TABLE audit_logs (
@@ -447,7 +447,7 @@ CREATE TABLE audit_logs (
     INDEX idx_audit_logs_user_id (user_id),
     INDEX idx_audit_logs_timestamp (timestamp),
     INDEX idx_audit_logs_user_timestamp (user_id, timestamp)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 23. Payment Gateways Table
 CREATE TABLE payment_gateways (
@@ -459,7 +459,7 @@ CREATE TABLE payment_gateways (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY unique_gateway_key (gateway_key),
     INDEX idx_gateways_active (is_active)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 24. Payment Methods Table
 CREATE TABLE payment_methods (
@@ -482,7 +482,7 @@ CREATE TABLE payment_methods (
     INDEX idx_payment_methods_user_id (user_id),
     INDEX idx_payment_methods_gateway_id (gateway_id),
     INDEX idx_payment_methods_default (user_id, is_default)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 25. Payment Transactions Table
 CREATE TABLE payment_transactions (
@@ -505,7 +505,7 @@ CREATE TABLE payment_transactions (
     INDEX idx_payments_org_id (organization_id),
     INDEX idx_payments_status (status),
     INDEX idx_payments_gateway_tx_id (gateway_transaction_id)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 25. Refresh Tokens Table
 CREATE TABLE refresh_tokens (
@@ -518,7 +518,7 @@ CREATE TABLE refresh_tokens (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_refresh_tokens_user_id (user_id),
     INDEX idx_refresh_tokens_expires (expires_at)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 26. API Keys Table
 CREATE TABLE api_keys (
@@ -534,7 +534,7 @@ CREATE TABLE api_keys (
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
     INDEX idx_api_keys_org_id (organization_id),
     INDEX idx_api_keys_active (is_active)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 27. Email Verifications Table
 CREATE TABLE email_verifications (
