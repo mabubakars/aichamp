@@ -23,54 +23,40 @@ class FastAPIProvider implements AIProvider {
     }
 
     public function chatCompletions($messages, $options = []) {
-        // Normalize messages to ensure they're in the correct format
         $normalizedMessages = $this->normalizeMessages($messages);
-        
-        // Prepare context_data and options as empty objects if empty
-        $contextData = !empty($options['context_data']) 
-            ? $options['context_data'] 
-            : new \stdClass();
-            
-        $llmOptions = !empty($options['llm_options']) 
-            ? $options['llm_options'] 
-            : new \stdClass();
         
         $payload = [
             'session_id' => $options['session_id'] ?? 'none',
             'user_id' => $options['user_id'] ?? 'none',
-            'messages' => $normalizedMessages,  // Keep as array
+            'messages' => $normalizedMessages,
             'model' => $this->modelName ?? $options['model_name'] ?? 'default',
             'provider' => $this->provider ?? $options['provider'] ?? 'ollama',
-            'context_data' => $contextData,  // Empty object if not provided
-            'options' => $llmOptions  // Empty object if not provided
+            'context_data' => !empty($options['context_data']) ? $options['context_data'] : new \stdClass(),
+            'options' => !empty($options['llm_options']) ? $options['llm_options'] : new \stdClass()
         ];
 
-        $url = rtrim($this->baseUrl, '/') . '/v1/chat/completions';
-        
-        Logger::debug("Calling FastAPI", [
-            'url' => $url, 
-            'model' => $payload['model'],
-            'provider' => $payload['provider'],
-            'message_count' => count($normalizedMessages)
-        ]);
-        
-        // Don't use JSON_FORCE_OBJECT - it breaks arrays!
-        $jsonPayload = json_encode($payload, JSON_UNESCAPED_UNICODE);
-        
-        if ($jsonPayload === false) {
-            throw new Exception("Failed to encode payload: " . json_last_error_msg());
+        // CHECK IF FILE EXISTS IN REQUEST
+        $hasFile = isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK;
+        $url = rtrim($this->baseUrl, '/') . '/v1/chat';
+
+        if ($hasFile) {
+            $url .= '/completions-with-file';
+            $postFields = [
+                'payload' => json_encode($payload),
+                'file' => new CURLFile($_FILES['file']['tmp_name'], $_FILES['file']['type'], $_FILES['file']['name'])
+            ];
+            $headers = ['Content-Type: multipart/form-data'];
+        } else {
+            $url .= '/completions';
+            $postFields = json_encode($payload);
+            $headers = ['Content-Type: application/json'];
         }
-        
-        Logger::debug("FastAPI payload", ['payload' => $jsonPayload]);
-        
+
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonPayload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Content-Length: ' . strlen($jsonPayload)
-        ]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_TIMEOUT, 300);
         
         $response = curl_exec($ch);
