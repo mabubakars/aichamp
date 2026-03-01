@@ -5,3 +5,7 @@ httpx
 pydantic
 langchain
 openai
+pymupdf
+python-docx
+numpy
+watchdog
