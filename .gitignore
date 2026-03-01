@@ -27,3 +27,6 @@ dist-ssr
 
 storage
 venv
+*.pkl
+books
+user_uploads
