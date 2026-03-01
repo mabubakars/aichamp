@@ -24,6 +24,12 @@ const Dashboard = ({
   const [loading, setLoading] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
 
+  // File upload states
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showFileMenu, setShowFileMenu] = useState(false);
+  const fileInputRef = useRef(null);
+  const fileMenuRef = useRef(null);
+
   const sessionId = sessionData?.id || null;
   const bottomRefs = useRef({});
   const { token } = useContext(AuthContext);
@@ -140,6 +146,54 @@ const Dashboard = ({
     });
   }, [messages, loadingModels, models]);
 
+  // Handle clicks outside file menu to close it
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(event.target)) {
+        setShowFileMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      const allowedExtensions = ['.pdf', '.doc', '.docx'];
+      const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+      
+      if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+        setError("Please select a PDF or Word file (.pdf, .doc, .docx)");
+        return;
+      }
+      
+      setSelectedFile(file);
+      setError("");
+      setShowFileMenu(false);
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleFileMenuClick = () => {
+    setShowFileMenu(!showFileMenu);
+  };
+
+  const openFileDialog = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
   const handleToggle = async (modelId, newState) => {
     try {
       const res = await sessionService.updateModelVisibility(
@@ -176,7 +230,11 @@ const Dashboard = ({
 
     const newMessages = { ...messages };
     Object.keys(newMessages).forEach((id) => {
-      newMessages[id].push({ type: "prompt", content: prompt });
+      newMessages[id].push({ 
+        type: "prompt", 
+        content: prompt,
+        file: selectedFile ? { name: selectedFile.name } : null
+      });
     });
     setMessages({ ...newMessages });
 
@@ -228,11 +286,23 @@ const Dashboard = ({
           for (const model of mappedModels) {
             if (model.visible !== 1) continue;
 
-            const res = await chatService.sendPromptToModel(
-              activeSessionId,
-              model.id,
-              prompt
-            );
+            let res;
+            if (selectedFile) {
+              // Send with file upload
+              res = await chatService.sendPromptWithFile(
+                activeSessionId,
+                model.id,
+                prompt,
+                selectedFile
+              );
+            } else {
+              // Send text-only
+              res = await chatService.sendPromptToModel(
+                activeSessionId,
+                model.id,
+                prompt
+              );
+            }
 
             if (res.ok) {
               newMessages[model.id].push({
@@ -246,6 +316,7 @@ const Dashboard = ({
           }
 
           setPrompt("");
+          handleRemoveFile();
           return;
         }
       }
@@ -255,11 +326,23 @@ const Dashboard = ({
       for (const model of models) {
         if (model.visible !== 1) continue;
 
-        const res = await chatService.sendPromptToModel(
-          activeSessionId,
-          model.id,
-          prompt
-        );
+        let res;
+        if (selectedFile) {
+          // Send with file upload
+          res = await chatService.sendPromptWithFile(
+            activeSessionId,
+            model.id,
+            prompt,
+            selectedFile
+          );
+        } else {
+          // Send text-only
+          res = await chatService.sendPromptToModel(
+            activeSessionId,
+            model.id,
+            prompt
+          );
+        }
 
         if (res.ok) {
           newMessages[model.id].push({
@@ -273,6 +356,7 @@ const Dashboard = ({
       }
 
       setPrompt("");
+      handleRemoveFile();
     } catch (err) {
       console.error(err);
       setError("Error sending prompt");
@@ -326,6 +410,15 @@ const Dashboard = ({
                       msg.type === "prompt" ? "msg-user" : "msg-ai"
                     }`}
                   >
+                    {msg.type === "prompt" && msg.file && (
+                      <div className="message-file-attachment">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                          <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                        <span>{msg.file.name}</span>
+                      </div>
+                    )}
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -369,24 +462,84 @@ const Dashboard = ({
 
       <div className="prompt-box">
         <div className="prompt-inner">
-          <textarea
-            className="prompt-input"
-            placeholder="Ask anything…"
-            value={prompt}
-            disabled={isSending}
-            rows={1}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (isSending) {
-                e.preventDefault();
-                return;
-              }
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
+          {/* Hidden file input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            style={{ display: 'none' }}
           />
+          
+          {/* Left side: Add file button */}
+          <div className="prompt-left-actions" ref={fileMenuRef}>
+            <button
+              type="button"
+              className="add-file-btn"
+              onClick={handleFileMenuClick}
+              title="Add file"
+            >
+              +
+            </button>
+            
+            {/* File menu dropdown */}
+            {showFileMenu && (
+              <div className="file-menu">
+                <button 
+                  type="button" 
+                  className="file-menu-item"
+                  onClick={openFileDialog}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                  </svg>
+                  Add Photo & Files
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* File Preview and Text Input */}
+          <div className="prompt-content-wrapper">
+            {/* File Preview */}
+            {selectedFile && (
+              <div className="file-preview">
+                <div className="file-preview-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                  </svg>
+                </div>
+                <span className="file-preview-name">{selectedFile.name}</span>
+                <button 
+                  type="button" 
+                  className="file-preview-remove" 
+                  onClick={handleRemoveFile}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+            <textarea
+              className="prompt-input"
+              placeholder="Ask anything…"
+              value={prompt}
+              disabled={isSending}
+              rows={1}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (isSending) {
+                  e.preventDefault();
+                  return;
+                }
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
+            />
+          </div>
 
           <button
             className="submit-btn"

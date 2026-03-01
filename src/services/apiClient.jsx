@@ -15,6 +15,10 @@ export const apiClient = {
     return request(url, "POST", payload);
   },
 
+  postFormData: async (url, formData) => {
+    return requestFormData(url, "POST", formData);
+  },
+
   put: async (url, payload) => {
     return request(url, "PUT", payload);
   },
@@ -37,6 +41,33 @@ const request = async (url, method, payload = null) => {
       method,
       headers,
       body: payload ? JSON.stringify(payload) : null,
+    });
+
+    if (response.status === 401) {
+      window.dispatchEvent(new CustomEvent('unauthorized'));
+      return { ok: false, status: 401, data: { message: "Unauthorized" } };
+    }
+
+    const data = await response.json();
+    return { ok: response.ok, status: response.status, data };
+
+  } catch (error) {
+    return { ok: false, status: 500, data: { message: "Network error" } };
+  }
+};
+
+const requestFormData = async (url, method, formData) => {
+  const token = getToken();
+
+  const headers = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  try {
+    const response = await fetch(`${BASE_URL}${url}`, {
+      method,
+      headers,
+      body: formData,
     });
 
     if (response.status === 401) {
