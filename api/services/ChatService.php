@@ -165,6 +165,15 @@ class ChatService {
             // 4. Delete session_models
             $this->db->delete('session_models', ['session_id' => $sessionId]);
 
+            $pythonUrl = Environment::get('PYTHON_FASTAPI_URL');
+            $url = rtrim($pythonUrl, '/') . "/v1/chat/sessions/" . $sessionId;
+            
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_exec($ch);
+            curl_close($ch);
+            
             // 5. Delete the session itself
             $success = $this->db->delete('chat_sessions', ['id' => $sessionId]);
 

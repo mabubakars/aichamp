@@ -86,3 +86,30 @@ class RAGService:
                 results.append((cls._db["chunks"][i], meta, float(scores[i])))
             if len(results) >= 5: break
         return results
+    
+    @classmethod
+    def clear_session_vectors(cls, session_id: str):
+        """Removes all chunks and embeddings associated with a deleted session."""
+        if not cls._db["metadata"]:
+            return 0
+
+        # Find indices where session_id matches
+        indices_to_remove = [
+            i for i, m in enumerate(cls._db["metadata"]) 
+            if m.get("session_id") == session_id
+        ]
+
+        # Remove from back to front to avoid index shifting
+        for i in sorted(indices_to_remove, reverse=True):
+            cls._db["embeddings"].pop(i)
+            cls._db["chunks"].pop(i)
+            cls._db["metadata"].pop(i)
+
+        # Also remove from hashes to allow re-uploading in the future
+        keys_to_forget = [k for k, v in cls._db["hashes"].items() if f"user_uploads/{session_id}" in k]
+        for k in keys_to_forget:
+            cls._db.get("hashes", {}).pop(k, None)
+
+        cls.save_db()
+        print(f"Cleaned up {len(indices_to_remove)} vectors for session {session_id}")
+        return len(indices_to_remove)
