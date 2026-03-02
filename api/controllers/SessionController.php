@@ -544,45 +544,56 @@ class SessionController extends BaseController {
      */
     public function chatWithModel() {
         $user = $this->getAuthenticatedUser();
-            $sessionId = $this->getRouteParam('sessionId');
-            $modelId = $this->getRouteParam('modelId');
+        $sessionId = $this->getRouteParam('sessionId');
+        $modelId = $this->getRouteParam('modelId');
+
+        // Logic: Handle both Multi-part (files) and JSON (text-only)
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        
+        if (strpos($contentType, 'multipart/form-data') !== false) {
+            // It's a file upload
+            $content = $_POST['content'] ?? '';
+            $data = $_POST;
+        } else {
+            // It's a standard JSON request
             $data = $this->getJsonInput();
-
             $content = $data['content'] ?? '';
-            if (empty($content)) {
-                return $this->error("Content is required.", 400, 'VALIDATION_ERROR');
-            }
+        }
 
-            try {
-                $result = $this->chatService->chatWithModel($sessionId, $user['user_id'], $modelId, $content, $data);
+        if (empty($content)) {
+            return $this->error("Content is required.", 400, 'VALIDATION_ERROR');
+        }
 
-                $data = [
-                    'prompt' => [
-                        'id' => $result['prompt']['id'],
-                        'content' => $result['prompt']['content'],
-                        'input_tokens' => $result['prompt']['input_tokens'],
-                        'created_at' => $result['prompt']['created_at']
-                    ],
-                    'response' => [
-                        'id' => $result['response']['id'],
-                        'content' => $result['response']['content'],
-                        'output_tokens' => $result['response']['output_tokens'],
-                        'created_at' => $result['response']['created_at']
-                    ],
-                    'metadata' => $result['metadata']
-                ];
-                return $this->success($data, "Chat completed successfully.");
-            } catch (InvalidArgumentException $e) {
-                return $this->error($e->getMessage(), 400, 'VALIDATION_ERROR');
-            } catch (Exception $e) {
-                Logger::error("Service call failed", [
-                    'error' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine()
-                ]);
-                return $this->error("Operation failed", 500, 'CHAT_FAILED');
-            }
+        try {
+            // Pass the data to the service
+            $data['session_id'] = $sessionId;
+            $data['user_id'] = $user['user_id'];
 
+            $result = $this->chatService->chatWithModel($sessionId, $user['user_id'], $modelId, $content, $data);
+
+            return $this->success([
+                'prompt' => [
+                    'id' => $result['prompt']['id'],
+                    'content' => $result['prompt']['content'],
+                    'input_tokens' => $result['prompt']['input_tokens'],
+                    'created_at' => $result['prompt']['created_at']
+                ],
+                'response' => [
+                    'id' => $result['response']['id'],
+                    'content' => $result['response']['content'],
+                    'output_tokens' => $result['response']['output_tokens'],
+                    'created_at' => $result['response']['created_at']
+                ],
+                'metadata' => $result['metadata']
+            ], "Chat completed successfully.");
+        } catch (Exception $e) {
+            Logger::error("Service call failed", [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            return $this->error($e->getMessage(), 500, 'CHAT_FAILED');
+        }
     }
 
     /**

@@ -30,3 +30,7 @@ venv
 *.pkl
 books
 user_uploads
+__pycache__
+*.pyc
+*.py[cod]
+*$py.class

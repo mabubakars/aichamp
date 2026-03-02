@@ -1,7 +1,6 @@
-import httpx
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.rag_service import RAGService
-
+import httpx
 
 class LLMService:
     @staticmethod
@@ -13,14 +12,16 @@ class LLMService:
         # 1. RAG Lookup
         try:
             query_emb = await RAGService.get_embedding(user_query)
-            search_results = RAGService.search(query_emb)
-
+            # Pass the session_id to ensure we look in the right folders
+            search_results = RAGService.search(query_emb, request.session_id)
+            
             context_parts = []
             for chunk, meta, score in search_results:
-                if score > 0.4:  # Similarity threshold
+                # Lowered threshold to 0.3 to be more inclusive of relevant text
+                if score > 0.3: 
                     context_parts.append(f"[File: {meta['source']}]\n{chunk}")
-                    sources.append(meta["source"])
-
+                    sources.append(meta['source'])
+            
             if context_parts:
                 context_str = "\n\n---\n\n".join(context_parts)
         except Exception as e:
@@ -32,18 +33,18 @@ class LLMService:
                 "You are ScholarAI, an intelligent research assistant. "
                 "Below are relevant excerpts from the user's uploaded documents. "
                 "Use this context to provide a precise answer. If the context is not sufficient "
-                "to answer fully, supplement the answer with your general knowledge, "
-                "but clearly distinguish between what's in the text and what is general knowledge.\n\n"
+                "to answer fully, use your general knowledge to help, but mention that "
+                "the specific details were not found in the provided text.\n\n"
                 f"DOCUMENT CONTEXT:\n{context_str}"
             )
         else:
-            system_prompt = "You are ScholarAI, an intelligent research assistant. Answer the user's questions clearly and accurately."
+            system_prompt = (
+                "You are ScholarAI, an intelligent research assistant. "
+                "Answer the user's questions clearly. (No document context was found for this specific query)."
+            )
 
-        # 3. Call Provider
-        messages = [{"role": "system", "content": system_prompt}] + [
-            m.dict() for m in request.messages
-        ]
-
+        messages = [{"role": "system", "content": system_prompt}] + [m.dict() for m in request.messages]
+        
         return await LLMService._call_ollama(request, messages, sources)
 
     @staticmethod
@@ -51,15 +52,25 @@ class LLMService:
         async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.post(
                 "http://localhost:11434/api/chat",
-                json={"model": request.model, "messages": messages, "stream": False},
+                json={
+                    "model": request.model,
+                    "messages": messages,
+                    "stream": False
+                }
             )
+            
             data = resp.json()
+
+            if "message" not in data:
+                error_detail = data.get("error", "Unknown Ollama Error")
+                raise Exception(f"Ollama API Error: {error_detail}")
+
             return ChatResponse(
-                content=data["message"]["content"],
+                content=data['message']['content'],
                 model=request.model,
                 usage={"total_tokens": data.get("eval_count", 0)},
                 metadata={
                     "sources": list(set(sources)),
-                    "rag_applied": len(sources) > 0,
-                },
+                    "rag_applied": len(sources) > 0
+                }
             )

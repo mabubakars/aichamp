@@ -22,7 +22,7 @@ async def startup():
     await initial_index()
     start_monitoring()
 
-app.include_router(chat.router, prefix="/v1/chat")
+app.include_router(chat.router, prefix="/v1/chat", tags=["Chat"])
 
 if __name__ == "__main__":
     import uvicorn

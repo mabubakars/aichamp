@@ -923,3 +923,30 @@ INSERT INTO payment_gateways (id, name, gateway_key, config) VALUES
 (UUID(), 'Razorpay', 'razorpay', '{"webhook_secret": ""}');
 
 SELECT 'Complete multi-model database schema created successfully!' as message;
+
+
+CREATE TABLE IF NOT EXISTS vector_memories (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    session_id CHAR(36) NOT NULL,
+    prompt_id CHAR(36) NULL,
+    response_id CHAR(36) NULL,
+    content TEXT NOT NULL,
+    role ENUM('user', 'assistant', 'system') NOT NULL,
+    embedding JSON,
+    metadata JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    INDEX idx_vector_memories_session (session_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS rate_limits (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    user_id CHAR(36) NOT NULL,
+    rate_key VARCHAR(255) NOT NULL,
+    operation VARCHAR(100) NOT NULL,
+    count INT DEFAULT 0,
+    window_start TIMESTAMP NULL,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_rate_key (rate_key),
+    INDEX idx_rate_limits_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
