@@ -109,6 +109,29 @@
   100% { transform: rotate(360deg); }
 }
 
+.page-loader {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.page-loader .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e9ecef;
+  border-top: 3px solid var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.page-loader p {
+  margin-top: 16px;
+  color: #666;
+  font-size: 0.95rem;
+}
+
 .form-check-input{
   float: left;
   margin-left: -5%;
