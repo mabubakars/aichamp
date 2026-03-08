@@ -9,12 +9,10 @@ export const chatService = {
   },
 
   sendPromptToModel: (sessionId, modelId, content) => {
-    console.log('sendPromptToModel URL:', `sessions/${sessionId}/models/${modelId}/chat`);
     return apiClient.post(`sessions/${sessionId}/models/${modelId}/chat`, { content });
   },
 
   sendPromptWithFile: async (sessionId, modelId, content, file) => {
-    console.log('sendPromptWithFile URL:', `sessions/${sessionId}/models/${modelId}/chat`);
     const formData = new FormData();
     formData.append('content', content);
     formData.append('file', file);
