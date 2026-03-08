@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { authService } from "../services/authService";
 import "../styles/auth.css";
+import "../styles/UpgradePlan.css";
 
 const Profile = () => {
   const [form, setForm] = useState({
@@ -69,7 +70,13 @@ useEffect(() => {
     toast.success("Profile updated successfully.");
   };
 
-  if (fetching) return <p style={{ padding: "20px" }}>Loading profile...</p>;
+  if (fetching) return (
+    <div className="page active">
+      <div className="auth-container">
+        <div className="loading-message">Loading profile...</div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="page active">
