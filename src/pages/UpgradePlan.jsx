@@ -140,7 +140,6 @@ const UpgradePlan = () => {
                     onSelect={() => {
                       if (!plan.disabled) {
                         setSelectedPlan(plan);
-                        console.log('Plan selected:', plan.name);
                         setTimeout(() => setShowPayment(true), 500);
                       }
                     }}

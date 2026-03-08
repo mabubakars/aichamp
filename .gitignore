@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.env
+
+storage
+venv
+*.pkl
+books
+user_uploads
