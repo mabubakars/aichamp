@@ -93,7 +93,8 @@ class Environment {
         return self::$variables;
     }
     public static function getAllowedOrigins() {
-        $origins = self::get('ALLOWED_ORIGINS', 'http://localhost');
+        // $origins = self::get('ALLOWED_ORIGINS', 'http://localhost');
+        $origins = "*";
         return array_map('trim', explode(',', $origins));
     }
 }

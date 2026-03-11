@@ -535,33 +535,36 @@ class ChatService {
      * Build conversation context for AI provider
      */
     private function buildConversationContext($sessionId, $currentPrompt) {
-        // Get recent conversation history (last 10 exchanges)
         $thread = $this->aiResponseModel->getConversationThread($sessionId, 20);
-
         $messages = [];
 
         foreach ($thread as $item) {
-            if ($item['type'] === 'prompt') {
-                $messages[] = [
-                    'role' => 'user',
-                    'content' => $item['content']
-                ];
-            } elseif ($item['type'] === 'response') {
-                $messages[] = [
-                    'role' => 'assistant',
-                    'content' => $item['content']
-                ];
+            // Skip the current prompt — it's added explicitly at the end
+            if ($item['type'] === 'prompt' && $item['id'] === $currentPrompt['id']) {
+                continue;
             }
-        }
 
-        // Add current prompt if not already included
-        $lastMessage = end($messages);
-        if (!$lastMessage || $lastMessage['role'] !== 'user' || $lastMessage['content'] !== $currentPrompt['content']) {
+            $role = ($item['type'] === 'prompt') ? 'user' : 'assistant';
+            $content = $item['content'];
+
+            if ($role === 'assistant') {
+                $content = preg_replace('/<think>.*?<\/think>/s', '', $content);
+                $content = trim($content);
+
+                if (empty($content)) continue;
+            }
+
             $messages[] = [
-                'role' => 'user',
-                'content' => $currentPrompt['content']
+                'role' => $role,
+                'content' => $content
             ];
         }
+
+        // Always append current prompt cleanly at the end
+        $messages[] = [
+            'role' => 'user',
+            'content' => trim($currentPrompt['content'])
+        ];
 
         return $messages;
     }

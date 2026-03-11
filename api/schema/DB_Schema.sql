@@ -950,3 +950,7 @@ CREATE TABLE IF NOT EXISTS rate_limits (
     UNIQUE KEY unique_rate_key (rate_key),
     INDEX idx_rate_limits_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+UPDATE ai_models 
+SET model_name = 'deepseek/deepseek-r1' 
+WHERE display_name = 'DeepSeek: R1 0528';
