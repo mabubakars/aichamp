@@ -90,7 +90,7 @@ class LLMService:
             # Log full response for debugging
             print(f"OpenRouter Status: {resp.status_code}")
             data = resp.json()
-            print(f"OpenRouter Response: {json.dumps(data, indent=2)}")
+            # print(f"OpenRouter Response: {json.dumps(data, indent=2)}")
             
             # Check for API-level errors
             if resp.status_code != 200:
