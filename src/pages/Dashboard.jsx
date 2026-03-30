@@ -52,6 +52,7 @@ const Dashboard = ({
               bottomRefs.current[m.id] = bottomRefs.current[m.id] || React.createRef();
             });
 
+            // Build a map of prompts by id, preserving file_name
             const promptMap = {};
             sessionMessages?.forEach((msg) => {
                if (msg.type === "prompt") {
@@ -63,7 +64,12 @@ const Dashboard = ({
                if (msg.type === "response" && msgMap[msg.model_id]) {
                  const prompt = promptMap[msg.prompt_id];
                  if (prompt && !msgMap[msg.model_id].some(item => item.type === "prompt" && item.content === prompt.content)) {
-                   msgMap[msg.model_id].push({ type: "prompt", content: prompt.content });
+                   // Include file_name from the stored prompt if it exists
+                   msgMap[msg.model_id].push({
+                     type: "prompt",
+                     content: prompt.content,
+                     file: prompt.file_name ? { name: prompt.file_name } : null,
+                   });
                  }
                  msgMap[msg.model_id].push({
                    type: "response",
