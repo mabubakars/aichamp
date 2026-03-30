@@ -499,7 +499,8 @@ class AIResponse {
                         up.created_at,
                         NULL as model_id,
                         NULL as cost,
-                        up.id as prompt_id
+                        up.id as prompt_id,
+                        up.file_name
                     FROM user_prompts up
                     WHERE up.session_id = ?
                     AND EXISTS (SELECT 1 FROM ai_responses ar WHERE ar.prompt_id = up.id)
@@ -515,7 +516,8 @@ class AIResponse {
                         ar.created_at,
                         ar.model_id,
                         ar.prompt_id,
-                        ar.prompt_id as prompt_id
+                        ar.prompt_id as prompt_id,
+                        NULL as file_name
                     FROM ai_responses ar
                     WHERE ar.session_id = ?
                     ORDER BY created_at ASC
