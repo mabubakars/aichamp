@@ -315,7 +315,8 @@ class ChatService {
                 'metadata' => array_merge($options['metadata'] ?? [], [
                     'multi_model' => true,
                     'aggregation_strategy' => $options['aggregation_strategy'] ?? 'combine_all'
-                ])
+                ]),
+                'file_name' => $options['file_name'] ?? null
             ]);
 
             // Store vector memory for user prompt
@@ -652,7 +653,8 @@ class ChatService {
                 'user_id' => $userId,
                 'content' => $content,
                 'token_count' => $options['token_count'] ?? 0,
-                'metadata' => $options['metadata'] ?? null
+                'metadata' => $options['metadata'] ?? null,
+                'file_name' => $options['file_name'] ?? null
             ]);
 
             // Store vector memory for user prompt
