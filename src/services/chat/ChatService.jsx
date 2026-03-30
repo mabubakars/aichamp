@@ -18,6 +18,7 @@ export const chatService = {
     const formData = new FormData();
     formData.append('content', content);
     formData.append('file', file);
+    formData.append('file_name', file.name);
     return apiClient.postFormData(`sessions/${sessionId}/models/${modelId}/chat`, formData);
   }
 };
