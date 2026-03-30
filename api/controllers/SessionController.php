@@ -549,11 +549,15 @@ class SessionController extends BaseController {
 
         // Logic: Handle both Multi-part (files) and JSON (text-only)
         $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
-        
+
         if (strpos($contentType, 'multipart/form-data') !== false) {
             // It's a file upload
             $content = $_POST['content'] ?? '';
             $data = $_POST;
+            // Extract the original file name from the upload to persist it
+            if (isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
+                $data['file_name'] = $_FILES['file']['name'];
+            }
         } else {
             // It's a standard JSON request
             $data = $this->getJsonInput();
