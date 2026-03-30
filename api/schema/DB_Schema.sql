@@ -954,3 +954,8 @@ CREATE TABLE IF NOT EXISTS rate_limits (
 UPDATE ai_models 
 SET model_name = 'deepseek/deepseek-r1' 
 WHERE display_name = 'DeepSeek: R1 0528';
+
+
+ALTER TABLE user_prompts 
+ADD COLUMN file_name VARCHAR(255) NULL DEFAULT NULL 
+AFTER metadata;
