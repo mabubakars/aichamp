@@ -957,5 +957,4 @@ WHERE display_name = 'DeepSeek: R1 0528';
 
 
 ALTER TABLE user_prompts 
-ADD COLUMN file_name VARCHAR(255) NULL DEFAULT NULL 
-AFTER metadata;
+ADD COLUMN file_name VARCHAR(255) NULL DEFAULT NULL AFTER metadata;
