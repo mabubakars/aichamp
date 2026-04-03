@@ -23,6 +23,7 @@ class FastAPIProvider implements AIProvider {
     }
 
     public function chatCompletions($messages, $options = []) {
+        set_time_limit(600);
         $normalizedMessages = $this->normalizeMessages($messages);
         
         $payload = [

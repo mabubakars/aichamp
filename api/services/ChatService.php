@@ -351,8 +351,8 @@ class ChatService {
 
             $provider = $this->aiProviderFactory->createMultiModel($models, $multiModelConfig);
 
-            // Build conversation context
-            $messages = $this->buildConversationContext($sessionId, $prompt);
+            // Build conversation context — filtered to this model's history only
+            $messages = $this->buildConversationContext($sessionId, $prompt, $model['id']);
 
             // Execute multi-model request
             $performanceMonitor = new PerformanceMonitor($this->db);
@@ -535,8 +535,8 @@ class ChatService {
     /**
      * Build conversation context for AI provider
      */
-    private function buildConversationContext($sessionId, $currentPrompt) {
-        $thread = $this->aiResponseModel->getConversationThread($sessionId, 20);
+    private function buildConversationContext($sessionId, $currentPrompt, $modelId = null) {
+        $thread = $this->aiResponseModel->getConversationThread($sessionId, 20, $modelId);
         $messages = [];
 
         foreach ($thread as $item) {
@@ -670,8 +670,8 @@ class ChatService {
                 'metadata' => $options['metadata'] ?? null
             ]);
 
-            // Build conversation context
-            $messages = $this->buildConversationContext($sessionId, $prompt);
+            // Build conversation context — filtered to this model's history only
+            $messages = $this->buildConversationContext($sessionId, $prompt, $model['id']);
 
             // Get AI provider
             $provider = $this->aiProviderFactory->create($aiModel);

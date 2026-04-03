@@ -484,46 +484,89 @@ class AIResponse {
     /**
      * Get conversation thread (prompt + responses)
      */
-    public function getConversationThread($sessionId, $limit = 50) {
+    public function getConversationThread($sessionId, $limit = 50, $modelId = null) {
         $startTime = microtime(true);
 
         try {
-            $sql = "SELECT
-                        'prompt' as type,
-                        up.id,
-                        up.session_id,
-                        up.user_id,
-                        up.content,
-                        up.input_tokens,
-                        up.metadata,
-                        up.created_at,
-                        NULL as model_id,
-                        NULL as cost,
-                        up.id as prompt_id,
-                        up.file_name
-                    FROM user_prompts up
-                    WHERE up.session_id = ?
-                    AND EXISTS (SELECT 1 FROM ai_responses ar WHERE ar.prompt_id = up.id)
-                    UNION ALL
-                    SELECT
-                        'response' as type,
-                        ar.id,
-                        ar.session_id,
-                        NULL as user_id,
-                        ar.content,
-                        ar.output_tokens,
-                        ar.metadata,
-                        ar.created_at,
-                        ar.model_id,
-                        ar.prompt_id,
-                        ar.prompt_id as prompt_id,
-                        NULL as file_name
-                    FROM ai_responses ar
-                    WHERE ar.session_id = ?
-                    ORDER BY created_at ASC
-                    LIMIT ?";
+            if ($modelId) {
+                // Per-model history: only prompts that have a response from THIS model,
+                // and only THIS model's responses
+                $sql = "SELECT
+                            'prompt' as type,
+                            up.id,
+                            up.session_id,
+                            up.user_id,
+                            up.content,
+                            up.input_tokens,
+                            up.metadata,
+                            up.created_at,
+                            NULL as model_id,
+                            NULL as cost,
+                            up.id as prompt_id,
+                            up.file_name
+                        FROM user_prompts up
+                        WHERE up.session_id = ?
+                        AND EXISTS (SELECT 1 FROM ai_responses ar WHERE ar.prompt_id = up.id AND ar.model_id = ?)
+                        UNION ALL
+                        SELECT
+                            'response' as type,
+                            ar.id,
+                            ar.session_id,
+                            NULL as user_id,
+                            ar.content,
+                            ar.output_tokens,
+                            ar.metadata,
+                            ar.created_at,
+                            ar.model_id,
+                            ar.prompt_id,
+                            ar.prompt_id as prompt_id,
+                            NULL as file_name
+                        FROM ai_responses ar
+                        WHERE ar.session_id = ? AND ar.model_id = ?
+                        ORDER BY created_at ASC
+                        LIMIT ?";
 
-            $params = [$sessionId, $sessionId, $limit];
+                $params = [$sessionId, $modelId, $sessionId, $modelId, $limit];
+            } else {
+                // Unified thread (used for session message display)
+                $sql = "SELECT
+                            'prompt' as type,
+                            up.id,
+                            up.session_id,
+                            up.user_id,
+                            up.content,
+                            up.input_tokens,
+                            up.metadata,
+                            up.created_at,
+                            NULL as model_id,
+                            NULL as cost,
+                            up.id as prompt_id,
+                            up.file_name
+                        FROM user_prompts up
+                        WHERE up.session_id = ?
+                        AND EXISTS (SELECT 1 FROM ai_responses ar WHERE ar.prompt_id = up.id)
+                        UNION ALL
+                        SELECT
+                            'response' as type,
+                            ar.id,
+                            ar.session_id,
+                            NULL as user_id,
+                            ar.content,
+                            ar.output_tokens,
+                            ar.metadata,
+                            ar.created_at,
+                            ar.model_id,
+                            ar.prompt_id,
+                            ar.prompt_id as prompt_id,
+                            NULL as file_name
+                        FROM ai_responses ar
+                        WHERE ar.session_id = ?
+                        ORDER BY created_at ASC
+                        LIMIT ?";
+
+                $params = [$sessionId, $sessionId, $limit];
+            }
+
             $thread = $this->db->query($sql, $params);
 
             // Decode JSON metadata
@@ -537,6 +580,7 @@ class AIResponse {
 
             Logger::info("Retrieved conversation thread", [
                 'session_id' => $sessionId,
+                'model_id' => $modelId,
                 'limit' => $limit,
                 'returned_count' => count($thread),
                 'duration_ms' => $duration

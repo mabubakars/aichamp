@@ -118,7 +118,7 @@ class LLMService:
 
     @staticmethod
     async def _call_ollama(request: ChatRequest, messages: list, sources: list):
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with httpx.AsyncClient(timeout=None) as client:
             resp = await client.post(
                 "http://127.0.0.1:11434/api/chat",
                 json={"model": request.model, "messages": messages, "stream": False}

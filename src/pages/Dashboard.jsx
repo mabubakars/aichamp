@@ -289,12 +289,11 @@ const Dashboard = ({
 
           await sessionService.activateSession(activeSessionId);
 
-          for (const model of mappedModels) {
-            if (model.visible !== 1) continue;
+          const visibleModels = mappedModels.filter(m => m.visible === 1);
 
+          await Promise.all(visibleModels.map(async (model) => {
             let res;
             if (selectedFile) {
-              // Send with file upload
               res = await chatService.sendPromptWithFile(
                 activeSessionId,
                 model.id,
@@ -302,7 +301,6 @@ const Dashboard = ({
                 selectedFile
               );
             } else {
-              // Send text-only
               res = await chatService.sendPromptToModel(
                 activeSessionId,
                 model.id,
@@ -318,23 +316,22 @@ const Dashboard = ({
             }
 
             setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
-            setMessages({ ...newMessages });
-          }
+            setMessages((prev) => ({ ...prev, [model.id]: [...newMessages[model.id]] }));
+          }));
 
           setPrompt("");
           handleRemoveFile();
           return;
-        }
+                  }
       }
 
       await sessionService.activateSession(activeSessionId);
 
-      for (const model of models) {
-        if (model.visible !== 1) continue;
+      const visibleModels = models.filter(m => m.visible === 1);
 
+      await Promise.all(visibleModels.map(async (model) => {
         let res;
         if (selectedFile) {
-          // Send with file upload
           res = await chatService.sendPromptWithFile(
             activeSessionId,
             model.id,
@@ -342,7 +339,6 @@ const Dashboard = ({
             selectedFile
           );
         } else {
-          // Send text-only
           res = await chatService.sendPromptToModel(
             activeSessionId,
             model.id,
@@ -358,8 +354,8 @@ const Dashboard = ({
         }
 
         setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
-        setMessages({ ...newMessages });
-      }
+        setMessages((prev) => ({ ...prev, [model.id]: [...newMessages[model.id]] }));
+      }));
 
       setPrompt("");
       handleRemoveFile();
