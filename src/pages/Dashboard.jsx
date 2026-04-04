@@ -290,34 +290,36 @@ const Dashboard = ({
           await sessionService.activateSession(activeSessionId);
 
           const visibleModels = mappedModels.filter(m => m.visible === 1);
+          const visibleModelIds = visibleModels.map(m => m.id);
 
-          await Promise.all(visibleModels.map(async (model) => {
-            let res;
-            if (selectedFile) {
-              res = await chatService.sendPromptWithFile(
-                activeSessionId,
-                model.id,
-                prompt,
-                selectedFile
-              );
-            } else {
-              res = await chatService.sendPromptToModel(
-                activeSessionId,
-                model.id,
-                prompt
-              );
+          if (selectedFile) {
+            // File uploads must go one at a time (multipart limitation)
+            for (const model of visibleModels) {
+              const res = await chatService.sendPromptWithFile(activeSessionId, model.id, prompt, selectedFile);
+              if (res.ok) {
+                newMessages[model.id].push({ type: "response", content: res.data?.data?.response?.content || "" });
+              }
+              setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+              setMessages((prev) => ({ ...prev, [model.id]: [...newMessages[model.id]] }));
             }
-
+          } else {
+            const res = await chatService.sendPromptBatch(activeSessionId, visibleModelIds, prompt);
             if (res.ok) {
-              newMessages[model.id].push({
-                type: "response",
-                content: res.data?.data?.response?.content || "",
-              });
+              const responses = res.data?.data?.responses || {};
+              for (const model of visibleModels) {
+                const r = responses[model.id];
+                if (r) {
+                  newMessages[model.id].push({ type: "response", content: r.content || "" });
+                }
+                setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+              }
+              setMessages({ ...newMessages });
+            } else {
+              for (const model of visibleModels) {
+                setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+              }
             }
-
-            setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
-            setMessages((prev) => ({ ...prev, [model.id]: [...newMessages[model.id]] }));
-          }));
+          }
 
           setPrompt("");
           handleRemoveFile();
@@ -328,34 +330,35 @@ const Dashboard = ({
       await sessionService.activateSession(activeSessionId);
 
       const visibleModels = models.filter(m => m.visible === 1);
+      const visibleModelIds = visibleModels.map(m => m.id);
 
-      await Promise.all(visibleModels.map(async (model) => {
-        let res;
-        if (selectedFile) {
-          res = await chatService.sendPromptWithFile(
-            activeSessionId,
-            model.id,
-            prompt,
-            selectedFile
-          );
-        } else {
-          res = await chatService.sendPromptToModel(
-            activeSessionId,
-            model.id,
-            prompt
-          );
+      if (selectedFile) {
+        for (const model of visibleModels) {
+          const res = await chatService.sendPromptWithFile(activeSessionId, model.id, prompt, selectedFile);
+          if (res.ok) {
+            newMessages[model.id].push({ type: "response", content: res.data?.data?.response?.content || "" });
+          }
+          setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+          setMessages((prev) => ({ ...prev, [model.id]: [...newMessages[model.id]] }));
         }
-
+      } else {
+        const res = await chatService.sendPromptBatch(activeSessionId, visibleModelIds, prompt);
         if (res.ok) {
-          newMessages[model.id].push({
-            type: "response",
-            content: res.data?.data?.response?.content || "",
-          });
+          const responses = res.data?.data?.responses || {};
+          for (const model of visibleModels) {
+            const r = responses[model.id];
+            if (r) {
+              newMessages[model.id].push({ type: "response", content: r.content || "" });
+            }
+            setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+          }
+          setMessages({ ...newMessages });
+        } else {
+          for (const model of visibleModels) {
+            setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+          }
         }
-
-        setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
-        setMessages((prev) => ({ ...prev, [model.id]: [...newMessages[model.id]] }));
-      }));
+      }
 
       setPrompt("");
       handleRemoveFile();

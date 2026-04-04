@@ -755,6 +755,115 @@ class ChatService {
     }
 
     /**
+     * Chat with all visible models for a session in one parallel Python call.
+     */
+    public function chatWithModelsBatch($sessionId, $userId, $content, $visibleModelIds, $options = []) {
+        $startTime = microtime(true);
+
+        // Verify session ownership once
+        $session = $this->getSession($sessionId, $userId);
+
+        // Build targets array with model details
+        $targets = [];
+        $modelDetails = []; // keyed by model UUID
+        foreach ($visibleModelIds as $modelId) {
+            $model = $this->aiModelModel->getById($modelId);
+            if (!$model || !$model['is_active']) continue;
+
+            $targets[] = [
+                'model_id' => $model['id'],
+                'model'    => $model['model_name'],
+                'provider' => $model['provider'],
+            ];
+            $modelDetails[$model['id']] = $model;
+        }
+
+        if (empty($targets)) {
+            throw new InvalidArgumentException("No active visible models found");
+        }
+
+        // Create ONE shared user prompt (all models reference the same prompt)
+        $prompt = $this->userPromptModel->create([
+            'session_id' => $sessionId,
+            'user_id'    => $userId,
+            'content'    => $content,
+            'token_count' => $options['token_count'] ?? 0,
+            'metadata'   => $options['metadata'] ?? null,
+            'file_name'  => $options['file_name'] ?? null,
+        ]);
+
+        // Store vector memory for the user prompt
+        $this->storeVectorMemory($sessionId, $content, 'user', $prompt['id'], null, [
+            'token_count' => $options['token_count'] ?? 0,
+            'metadata'    => $options['metadata'] ?? null,
+        ]);
+
+        // Build context per model (each model gets its own history)
+        // We pass messages from the FIRST model's perspective for the batch RAG call;
+        // Python does RAG once and shares context across all models.
+        // The per-model conversation history is encoded in the messages we send.
+        // For simplicity we use the current prompt only — per-model history is already
+        // handled by buildConversationContext per single-model call.
+        // In batch mode we send the full messages array built for the first target,
+        // since RAG context is shared and model-specific history is managed in PHP.
+        $firstModelId = $targets[0]['model_id'];
+        $messagesForBatch = $this->buildConversationContext($sessionId, $prompt, $firstModelId);
+
+        // Send batch request to Python
+        $provider = new FastAPIProvider(null);
+        $batchResults = $provider->chatCompletionsBatch($messagesForBatch, $targets, [
+            'session_id' => $sessionId,
+            'user_id'    => $userId,
+        ]);
+
+        // Store each model's response
+        $responses = [];
+        foreach ($batchResults as $modelId => $aiResponse) {
+            $model = $modelDetails[$modelId] ?? null;
+            if (!$model) continue;
+
+            $responseContent = $aiResponse['choices'][0]['message']['content'] ?? '';
+            $outputTokens    = $aiResponse['usage']['completion_tokens'] ?? 0;
+            $cost            = $this->calculateCost($model, $aiResponse['usage'] ?? []);
+
+            $response = $this->aiResponseModel->create([
+                'prompt_id'  => $prompt['id'],
+                'model_id'   => $modelId,
+                'session_id' => $sessionId,
+                'content'    => $responseContent,
+                'token_count' => $outputTokens,
+                'cost'       => $cost,
+                'metadata'   => ['ai_response' => $aiResponse],
+            ]);
+
+            $this->storeVectorMemory($sessionId, $responseContent, 'assistant', $prompt['id'], $response['id'], [
+                'model_id'   => $modelId,
+                'token_count' => $outputTokens,
+                'cost'       => $cost,
+            ]);
+
+            $this->extractAndStoreThinkingTraces($responseContent, $response['id'], $prompt['id'], $sessionId, $userId);
+
+            $responses[$modelId] = $response;
+        }
+
+        // Update session last message time
+        $this->chatSessionModel->update($sessionId, ['last_message_at' => date('Y-m-d H:i:s')]);
+
+        $duration = round((microtime(true) - $startTime) * 1000, 2);
+        Logger::info("Batch chat completed", [
+            'session_id'    => $sessionId,
+            'model_count'   => count($targets),
+            'duration_ms'   => $duration,
+        ]);
+
+        return [
+            'prompt'    => $prompt,
+            'responses' => $responses,
+        ];
+    }
+    
+    /**
      * Get conversation thread
      */
     public function getConversationThread($sessionId, $userId, $limit = 50) {

@@ -1,3 +1,6 @@
+# app/services/llm_service.py
+import asyncio
+
 import httpx
 import os
 import json
@@ -16,55 +19,107 @@ class LLMService:
         print(f"{'='*50}\n")
 
     @staticmethod
-    async def process_chat(request: ChatRequest) -> ChatResponse:
+    async def _build_context(request: ChatRequest):
+        """Shared RAG lookup and system prompt building."""
         user_query = request.messages[-1].content
         context_str = ""
         sources = []
 
-        print(f"--- Processing Chat for Provider: {request.provider} | Model: {request.model} ---")
-
-        # 1. RAG Lookup
         try:
             query_emb = await RAGService.get_embedding(user_query)
             search_results = RAGService.search(query_emb, request.session_id)
-            
+
             context_parts = []
             for chunk, meta, score in search_results:
-                if score > 0.3: 
+                if score > 0.3:
                     context_parts.append(f"[File: {meta['source']}]\n{chunk}")
                     sources.append(meta['source'])
-            
+
             if context_parts:
                 context_str = "\n\n---\n\n".join(context_parts)
         except Exception as e:
             print(f"RAG Error (Non-Fatal): {e}")
 
-        # 2. Build System Prompt
         system_prompt = (
-            f"You are ScholarAI. DOCUMENT CONTEXT:\n{context_str}" if context_str 
+            f"You are ScholarAI. DOCUMENT CONTEXT:\n{context_str}" if context_str
             else "You are ScholarAI, an intelligent research assistant."
         )
 
         messages = [{"role": "system", "content": system_prompt}] + [m.dict() for m in request.messages]
-        
-        # 3. ROUTING
+        return messages, sources
+
+    @staticmethod
+    async def process_chat(request: ChatRequest) -> ChatResponse:
+        print(f"--- Processing Chat for Provider: {request.provider} | Model: {request.model} ---")
+
+        messages, sources = await LLMService._build_context(request)
+
         try:
-            if request.provider == "openrouter":
+            if request.provider.startswith("openrouter"):
                 return await LLMService._call_openrouter(request, messages, sources)
             else:
                 return await LLMService._call_ollama(request, messages, sources)
         except Exception as e:
             print(f"FATAL ERROR in {request.provider}: {str(e)}")
-            traceback.print_exc() # This will print the full line-by-line error in your terminal
+            traceback.print_exc()
             raise e
 
     @staticmethod
+    async def process_chat_batch(request: ChatRequest) -> dict:
+        """
+        Run all targets in parallel using asyncio.gather.
+        RAG embedding is computed once and shared.
+        Returns dict keyed by model_id (PHP UUID).
+        """
+        print(f"--- Batch Processing {len(request.targets)} models in parallel ---")
+
+        # Run RAG once for all models
+        messages_base, sources = await LLMService._build_context(request)
+
+        async def _call_single(target):
+            # Clone request fields, override model/provider for this target
+            single = ChatRequest(
+                session_id=request.session_id,
+                user_id=request.user_id,
+                messages=request.messages,
+                model=target.model,
+                provider=target.provider,
+                context_data=request.context_data,
+                options=request.options,
+            )
+            try:
+                if target.provider.startswith("openrouter"):
+                    response = await LLMService._call_openrouter(single, messages_base, sources)
+                else:
+                    response = await LLMService._call_ollama(single, messages_base, sources)
+                return target.model_id, response
+            except Exception as e:
+                print(f"Error for model {target.model}: {e}")
+                traceback.print_exc()
+                # Return an error response so other models still succeed
+                return target.model_id, ChatResponse(
+                    content=f"Error: {str(e)}",
+                    model=target.model,
+                    metadata={"error": str(e)}
+                )
+
+        results_list = await asyncio.gather(*[_call_single(t) for t in request.targets])
+        return {model_id: response for model_id, response in results_list}
+
+    @staticmethod
     async def _call_openrouter(request: ChatRequest, messages: list, sources: list):
-        api_key = os.getenv("OPENROUTER_API_KEY")
+        # Map provider name to its corresponding API key env variable
+        api_key_map = {
+            "openrouter1": "OPENROUTER_API_KEY1",
+            "openrouter2": "OPENROUTER_API_KEY2",
+            "openrouter3": "OPENROUTER_API_KEY3",
+        }
+        api_key_var = api_key_map.get(request.provider, "OPENROUTER_API_KEY1")
+        api_key = os.getenv(api_key_var)
         api_url = os.getenv("OPENROUTER_API_URL")
-        
+
         if not api_key or not api_url:
-            raise ValueError("OPENROUTER_API_KEY or OPENROUTER_API_URL not set")
+            raise ValueError(f"{api_key_var} or OPENROUTER_API_URL not set")
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -82,23 +137,20 @@ class LLMService:
 
         async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.post(
-                api_url, 
-                headers=headers, 
+                api_url,
+                headers=headers,
                 json={"model": request.model, "messages": clean_messages}
             )
-            
-            # Log full response for debugging
-            print(f"OpenRouter Status: {resp.status_code}")
+
+            print(f"OpenRouter Status [{request.model}]: {resp.status_code}")
             data = resp.json()
-            # print(f"OpenRouter Response: {json.dumps(data, indent=2)}")
-            
-            # Check for API-level errors
+
             if resp.status_code != 200:
                 raise Exception(f"OpenRouter API error {resp.status_code}: {data.get('error', data)}")
-            
+
             if 'choices' not in data or not data['choices']:
                 raise Exception(f"No choices in OpenRouter response: {data}")
-            
+
             msg_obj = data['choices'][0]['message']
             content = msg_obj.get('content') or ''
             reasoning = msg_obj.get('reasoning') or ''
