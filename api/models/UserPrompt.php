@@ -53,7 +53,8 @@ class UserPrompt {
                 'user_id' => $promptData['user_id'],
                 'content' => $this->sanitizeContent($promptData['content']),
                 'input_tokens' => isset($promptData['input_tokens']) ? (int)$promptData['input_tokens'] : 0,
-                'metadata' => isset($promptData['metadata']) ? json_encode($promptData['metadata']) : null
+                'metadata' => isset($promptData['metadata']) ? json_encode($promptData['metadata']) : null,
+                'file_name'    => $promptData['file_name'] ?? null,
             ];
 
             Logger::debug("Creating user prompt with data", ['data' => $insertData]);

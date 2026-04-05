@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from app.schemas.chat import ChatRequest, ChatResponse
+from app.schemas.chat import ChatRequest, ChatResponse, BatchChatResponse
 from app.services.llm_service import LLMService
 from app.services.rag_service import RAGService
 import json
@@ -7,12 +7,25 @@ import os
 
 router = APIRouter()
 
-# 1. Route for simple text messages (JSON)
+# 1. Route for simple text messages (JSON) — single model
 @router.post("/completions", response_model=ChatResponse)
 async def chat_completions(request: ChatRequest):
     try:
         return await LLMService.process_chat(request)
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 1b. Batch route — all models in parallel, single round-trip
+@router.post("/completions/batch", response_model=BatchChatResponse)
+async def chat_completions_batch(request: ChatRequest):
+    try:
+        if not request.targets:
+            raise HTTPException(status_code=400, detail="targets required for batch endpoint")
+        results = await LLMService.process_chat_batch(request)
+        return BatchChatResponse(results=results)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 # 2. Route for messages with attachments (Multipart)

@@ -547,15 +547,15 @@ class SessionController extends BaseController {
         $sessionId = $this->getRouteParam('sessionId');
         $modelId = $this->getRouteParam('modelId');
 
-        // Logic: Handle both Multi-part (files) and JSON (text-only)
         $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
-        
+
         if (strpos($contentType, 'multipart/form-data') !== false) {
-            // It's a file upload
             $content = $_POST['content'] ?? '';
             $data = $_POST;
+            if (isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
+                $data['file_name'] = $_FILES['file']['name'];
+            }
         } else {
-            // It's a standard JSON request
             $data = $this->getJsonInput();
             $content = $data['content'] ?? '';
         }
@@ -564,8 +564,44 @@ class SessionController extends BaseController {
             return $this->error("Content is required.", 400, 'VALIDATION_ERROR');
         }
 
+        // Batch mode: frontend sends model_ids[] instead of hitting per-model routes
+        if (!empty($data['model_ids']) && is_array($data['model_ids'])) {
+            try {
+                $result = $this->chatService->chatWithModelsBatch(
+                    $sessionId,
+                    $user['user_id'],
+                    $content,
+                    $data['model_ids'],
+                    $data
+                );
+
+                $responsesOut = [];
+                foreach ($result['responses'] as $mId => $resp) {
+                    $responsesOut[$mId] = [
+                        'id'           => $resp['id'],
+                        'content'      => $resp['content'],
+                        'output_tokens' => $resp['output_tokens'],
+                        'created_at'   => $resp['created_at'],
+                    ];
+                }
+
+                return $this->success([
+                    'prompt' => [
+                        'id'          => $result['prompt']['id'],
+                        'content'     => $result['prompt']['content'],
+                        'input_tokens' => $result['prompt']['input_tokens'],
+                        'created_at'  => $result['prompt']['created_at'],
+                    ],
+                    'responses' => $responsesOut,
+                ], "Batch chat completed successfully.");
+            } catch (Exception $e) {
+                Logger::error("Batch chat failed", ['error' => $e->getMessage()]);
+                return $this->error($e->getMessage(), 500, 'CHAT_FAILED');
+            }
+        }
+
+        // Single-model fallback (file uploads, or direct per-model calls)
         try {
-            // Pass the data to the service
             $data['session_id'] = $sessionId;
             $data['user_id'] = $user['user_id'];
 

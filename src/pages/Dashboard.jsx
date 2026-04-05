@@ -52,6 +52,7 @@ const Dashboard = ({
               bottomRefs.current[m.id] = bottomRefs.current[m.id] || React.createRef();
             });
 
+            // Build a map of prompts by id, preserving file_name
             const promptMap = {};
             sessionMessages?.forEach((msg) => {
                if (msg.type === "prompt") {
@@ -63,7 +64,12 @@ const Dashboard = ({
                if (msg.type === "response" && msgMap[msg.model_id]) {
                  const prompt = promptMap[msg.prompt_id];
                  if (prompt && !msgMap[msg.model_id].some(item => item.type === "prompt" && item.content === prompt.content)) {
-                   msgMap[msg.model_id].push({ type: "prompt", content: prompt.content });
+                   // Include file_name from the stored prompt if it exists
+                   msgMap[msg.model_id].push({
+                     type: "prompt",
+                     content: prompt.content,
+                     file: prompt.file_name ? { name: prompt.file_name } : null,
+                   });
                  }
                  msgMap[msg.model_id].push({
                    type: "response",
@@ -283,76 +289,75 @@ const Dashboard = ({
 
           await sessionService.activateSession(activeSessionId);
 
-          for (const model of mappedModels) {
-            if (model.visible !== 1) continue;
+          const visibleModels = mappedModels.filter(m => m.visible === 1);
+          const visibleModelIds = visibleModels.map(m => m.id);
 
-            let res;
-            if (selectedFile) {
-              // Send with file upload
-              res = await chatService.sendPromptWithFile(
-                activeSessionId,
-                model.id,
-                prompt,
-                selectedFile
-              );
-            } else {
-              // Send text-only
-              res = await chatService.sendPromptToModel(
-                activeSessionId,
-                model.id,
-                prompt
-              );
+          if (selectedFile) {
+            // File uploads must go one at a time (multipart limitation)
+            for (const model of visibleModels) {
+              const res = await chatService.sendPromptWithFile(activeSessionId, model.id, prompt, selectedFile);
+              if (res.ok) {
+                newMessages[model.id].push({ type: "response", content: res.data?.data?.response?.content || "" });
+              }
+              setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+              setMessages((prev) => ({ ...prev, [model.id]: [...newMessages[model.id]] }));
             }
-
+          } else {
+            const res = await chatService.sendPromptBatch(activeSessionId, visibleModelIds, prompt);
             if (res.ok) {
-              newMessages[model.id].push({
-                type: "response",
-                content: res.data?.data?.response?.content || "",
-              });
+              const responses = res.data?.data?.responses || {};
+              for (const model of visibleModels) {
+                const r = responses[model.id];
+                if (r) {
+                  newMessages[model.id].push({ type: "response", content: r.content || "" });
+                }
+                setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+              }
+              setMessages({ ...newMessages });
+            } else {
+              for (const model of visibleModels) {
+                setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+              }
             }
-
-            setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
-            setMessages({ ...newMessages });
           }
 
           setPrompt("");
           handleRemoveFile();
           return;
-        }
+                  }
       }
 
       await sessionService.activateSession(activeSessionId);
 
-      for (const model of models) {
-        if (model.visible !== 1) continue;
+      const visibleModels = models.filter(m => m.visible === 1);
+      const visibleModelIds = visibleModels.map(m => m.id);
 
-        let res;
-        if (selectedFile) {
-          // Send with file upload
-          res = await chatService.sendPromptWithFile(
-            activeSessionId,
-            model.id,
-            prompt,
-            selectedFile
-          );
-        } else {
-          // Send text-only
-          res = await chatService.sendPromptToModel(
-            activeSessionId,
-            model.id,
-            prompt
-          );
+      if (selectedFile) {
+        for (const model of visibleModels) {
+          const res = await chatService.sendPromptWithFile(activeSessionId, model.id, prompt, selectedFile);
+          if (res.ok) {
+            newMessages[model.id].push({ type: "response", content: res.data?.data?.response?.content || "" });
+          }
+          setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+          setMessages((prev) => ({ ...prev, [model.id]: [...newMessages[model.id]] }));
         }
-
+      } else {
+        const res = await chatService.sendPromptBatch(activeSessionId, visibleModelIds, prompt);
         if (res.ok) {
-          newMessages[model.id].push({
-            type: "response",
-            content: res.data?.data?.response?.content || "",
-          });
+          const responses = res.data?.data?.responses || {};
+          for (const model of visibleModels) {
+            const r = responses[model.id];
+            if (r) {
+              newMessages[model.id].push({ type: "response", content: r.content || "" });
+            }
+            setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+          }
+          setMessages({ ...newMessages });
+        } else {
+          for (const model of visibleModels) {
+            setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
+          }
         }
-
-        setLoadingModels((prev) => ({ ...prev, [model.id]: false }));
-        setMessages({ ...newMessages });
       }
 
       setPrompt("");
