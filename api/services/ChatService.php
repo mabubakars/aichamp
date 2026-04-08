@@ -165,6 +165,15 @@ class ChatService {
             // 4. Delete session_models
             $this->db->delete('session_models', ['session_id' => $sessionId]);
 
+            $pythonUrl = Environment::get('PYTHON_FASTAPI_URL');
+            $url = rtrim($pythonUrl, '/') . "/v1/chat/sessions/" . $sessionId;
+            
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_exec($ch);
+            curl_close($ch);
+            
             // 5. Delete the session itself
             $success = $this->db->delete('chat_sessions', ['id' => $sessionId]);
 
@@ -306,7 +315,8 @@ class ChatService {
                 'metadata' => array_merge($options['metadata'] ?? [], [
                     'multi_model' => true,
                     'aggregation_strategy' => $options['aggregation_strategy'] ?? 'combine_all'
-                ])
+                ]),
+                'file_name' => $options['file_name'] ?? null
             ]);
 
             // Store vector memory for user prompt
@@ -341,8 +351,8 @@ class ChatService {
 
             $provider = $this->aiProviderFactory->createMultiModel($models, $multiModelConfig);
 
-            // Build conversation context
-            $messages = $this->buildConversationContext($sessionId, $prompt);
+            // Build conversation context — filtered to this model's history only
+            $messages = $this->buildConversationContext($sessionId, $prompt, $model['id']);
 
             // Execute multi-model request
             $performanceMonitor = new PerformanceMonitor($this->db);
@@ -525,34 +535,37 @@ class ChatService {
     /**
      * Build conversation context for AI provider
      */
-    private function buildConversationContext($sessionId, $currentPrompt) {
-        // Get recent conversation history (last 10 exchanges)
-        $thread = $this->aiResponseModel->getConversationThread($sessionId, 20);
-
+    private function buildConversationContext($sessionId, $currentPrompt, $modelId = null) {
+        $thread = $this->aiResponseModel->getConversationThread($sessionId, 20, $modelId);
         $messages = [];
 
         foreach ($thread as $item) {
-            if ($item['type'] === 'prompt') {
-                $messages[] = [
-                    'role' => 'user',
-                    'content' => $item['content']
-                ];
-            } elseif ($item['type'] === 'response') {
-                $messages[] = [
-                    'role' => 'assistant',
-                    'content' => $item['content']
-                ];
+            // Skip the current prompt — it's added explicitly at the end
+            if ($item['type'] === 'prompt' && $item['id'] === $currentPrompt['id']) {
+                continue;
             }
-        }
 
-        // Add current prompt if not already included
-        $lastMessage = end($messages);
-        if (!$lastMessage || $lastMessage['role'] !== 'user' || $lastMessage['content'] !== $currentPrompt['content']) {
+            $role = ($item['type'] === 'prompt') ? 'user' : 'assistant';
+            $content = $item['content'];
+
+            if ($role === 'assistant') {
+                $content = preg_replace('/<think>.*?<\/think>/s', '', $content);
+                $content = trim($content);
+
+                if (empty($content)) continue;
+            }
+
             $messages[] = [
-                'role' => 'user',
-                'content' => $currentPrompt['content']
+                'role' => $role,
+                'content' => $content
             ];
         }
+
+        // Always append current prompt cleanly at the end
+        $messages[] = [
+            'role' => 'user',
+            'content' => trim($currentPrompt['content'])
+        ];
 
         return $messages;
     }
@@ -640,7 +653,8 @@ class ChatService {
                 'user_id' => $userId,
                 'content' => $content,
                 'token_count' => $options['token_count'] ?? 0,
-                'metadata' => $options['metadata'] ?? null
+                'metadata' => $options['metadata'] ?? null,
+                'file_name' => $options['file_name'] ?? null
             ]);
 
             // Store vector memory for user prompt
@@ -656,8 +670,8 @@ class ChatService {
                 'metadata' => $options['metadata'] ?? null
             ]);
 
-            // Build conversation context
-            $messages = $this->buildConversationContext($sessionId, $prompt);
+            // Build conversation context — filtered to this model's history only
+            $messages = $this->buildConversationContext($sessionId, $prompt, $model['id']);
 
             // Get AI provider
             $provider = $this->aiProviderFactory->create($aiModel);
@@ -740,6 +754,115 @@ class ChatService {
         }
     }
 
+    /**
+     * Chat with all visible models for a session in one parallel Python call.
+     */
+    public function chatWithModelsBatch($sessionId, $userId, $content, $visibleModelIds, $options = []) {
+        $startTime = microtime(true);
+
+        // Verify session ownership once
+        $session = $this->getSession($sessionId, $userId);
+
+        // Build targets array with model details
+        $targets = [];
+        $modelDetails = []; // keyed by model UUID
+        foreach ($visibleModelIds as $modelId) {
+            $model = $this->aiModelModel->getById($modelId);
+            if (!$model || !$model['is_active']) continue;
+
+            $targets[] = [
+                'model_id' => $model['id'],
+                'model'    => $model['model_name'],
+                'provider' => $model['provider'],
+            ];
+            $modelDetails[$model['id']] = $model;
+        }
+
+        if (empty($targets)) {
+            throw new InvalidArgumentException("No active visible models found");
+        }
+
+        // Create ONE shared user prompt (all models reference the same prompt)
+        $prompt = $this->userPromptModel->create([
+            'session_id' => $sessionId,
+            'user_id'    => $userId,
+            'content'    => $content,
+            'token_count' => $options['token_count'] ?? 0,
+            'metadata'   => $options['metadata'] ?? null,
+            'file_name'  => $options['file_name'] ?? null,
+        ]);
+
+        // Store vector memory for the user prompt
+        $this->storeVectorMemory($sessionId, $content, 'user', $prompt['id'], null, [
+            'token_count' => $options['token_count'] ?? 0,
+            'metadata'    => $options['metadata'] ?? null,
+        ]);
+
+        // Build context per model (each model gets its own history)
+        // We pass messages from the FIRST model's perspective for the batch RAG call;
+        // Python does RAG once and shares context across all models.
+        // The per-model conversation history is encoded in the messages we send.
+        // For simplicity we use the current prompt only — per-model history is already
+        // handled by buildConversationContext per single-model call.
+        // In batch mode we send the full messages array built for the first target,
+        // since RAG context is shared and model-specific history is managed in PHP.
+        $firstModelId = $targets[0]['model_id'];
+        $messagesForBatch = $this->buildConversationContext($sessionId, $prompt, $firstModelId);
+
+        // Send batch request to Python
+        $provider = new FastAPIProvider(null);
+        $batchResults = $provider->chatCompletionsBatch($messagesForBatch, $targets, [
+            'session_id' => $sessionId,
+            'user_id'    => $userId,
+        ]);
+
+        // Store each model's response
+        $responses = [];
+        foreach ($batchResults as $modelId => $aiResponse) {
+            $model = $modelDetails[$modelId] ?? null;
+            if (!$model) continue;
+
+            $responseContent = $aiResponse['choices'][0]['message']['content'] ?? '';
+            $outputTokens    = $aiResponse['usage']['completion_tokens'] ?? 0;
+            $cost            = $this->calculateCost($model, $aiResponse['usage'] ?? []);
+
+            $response = $this->aiResponseModel->create([
+                'prompt_id'  => $prompt['id'],
+                'model_id'   => $modelId,
+                'session_id' => $sessionId,
+                'content'    => $responseContent,
+                'token_count' => $outputTokens,
+                'cost'       => $cost,
+                'metadata'   => ['ai_response' => $aiResponse],
+            ]);
+
+            $this->storeVectorMemory($sessionId, $responseContent, 'assistant', $prompt['id'], $response['id'], [
+                'model_id'   => $modelId,
+                'token_count' => $outputTokens,
+                'cost'       => $cost,
+            ]);
+
+            $this->extractAndStoreThinkingTraces($responseContent, $response['id'], $prompt['id'], $sessionId, $userId);
+
+            $responses[$modelId] = $response;
+        }
+
+        // Update session last message time
+        $this->chatSessionModel->update($sessionId, ['last_message_at' => date('Y-m-d H:i:s')]);
+
+        $duration = round((microtime(true) - $startTime) * 1000, 2);
+        Logger::info("Batch chat completed", [
+            'session_id'    => $sessionId,
+            'model_count'   => count($targets),
+            'duration_ms'   => $duration,
+        ]);
+
+        return [
+            'prompt'    => $prompt,
+            'responses' => $responses,
+        ];
+    }
+    
     /**
      * Get conversation thread
      */

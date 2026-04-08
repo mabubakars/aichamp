@@ -544,45 +544,92 @@ class SessionController extends BaseController {
      */
     public function chatWithModel() {
         $user = $this->getAuthenticatedUser();
-            $sessionId = $this->getRouteParam('sessionId');
-            $modelId = $this->getRouteParam('modelId');
+        $sessionId = $this->getRouteParam('sessionId');
+        $modelId = $this->getRouteParam('modelId');
+
+        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+
+        if (strpos($contentType, 'multipart/form-data') !== false) {
+            $content = $_POST['content'] ?? '';
+            $data = $_POST;
+            if (isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
+                $data['file_name'] = $_FILES['file']['name'];
+            }
+        } else {
             $data = $this->getJsonInput();
-
             $content = $data['content'] ?? '';
-            if (empty($content)) {
-                return $this->error("Content is required.", 400, 'VALIDATION_ERROR');
-            }
+        }
 
+        if (empty($content)) {
+            return $this->error("Content is required.", 400, 'VALIDATION_ERROR');
+        }
+
+        // Batch mode: frontend sends model_ids[] instead of hitting per-model routes
+        if (!empty($data['model_ids']) && is_array($data['model_ids'])) {
             try {
-                $result = $this->chatService->chatWithModel($sessionId, $user['user_id'], $modelId, $content, $data);
+                $result = $this->chatService->chatWithModelsBatch(
+                    $sessionId,
+                    $user['user_id'],
+                    $content,
+                    $data['model_ids'],
+                    $data
+                );
 
-                $data = [
+                $responsesOut = [];
+                foreach ($result['responses'] as $mId => $resp) {
+                    $responsesOut[$mId] = [
+                        'id'           => $resp['id'],
+                        'content'      => $resp['content'],
+                        'output_tokens' => $resp['output_tokens'],
+                        'created_at'   => $resp['created_at'],
+                    ];
+                }
+
+                return $this->success([
                     'prompt' => [
-                        'id' => $result['prompt']['id'],
-                        'content' => $result['prompt']['content'],
+                        'id'          => $result['prompt']['id'],
+                        'content'     => $result['prompt']['content'],
                         'input_tokens' => $result['prompt']['input_tokens'],
-                        'created_at' => $result['prompt']['created_at']
+                        'created_at'  => $result['prompt']['created_at'],
                     ],
-                    'response' => [
-                        'id' => $result['response']['id'],
-                        'content' => $result['response']['content'],
-                        'output_tokens' => $result['response']['output_tokens'],
-                        'created_at' => $result['response']['created_at']
-                    ],
-                    'metadata' => $result['metadata']
-                ];
-                return $this->success($data, "Chat completed successfully.");
-            } catch (InvalidArgumentException $e) {
-                return $this->error($e->getMessage(), 400, 'VALIDATION_ERROR');
+                    'responses' => $responsesOut,
+                ], "Batch chat completed successfully.");
             } catch (Exception $e) {
-                Logger::error("Service call failed", [
-                    'error' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine()
-                ]);
-                return $this->error("Operation failed", 500, 'CHAT_FAILED');
+                Logger::error("Batch chat failed", ['error' => $e->getMessage()]);
+                return $this->error($e->getMessage(), 500, 'CHAT_FAILED');
             }
+        }
 
+        // Single-model fallback (file uploads, or direct per-model calls)
+        try {
+            $data['session_id'] = $sessionId;
+            $data['user_id'] = $user['user_id'];
+
+            $result = $this->chatService->chatWithModel($sessionId, $user['user_id'], $modelId, $content, $data);
+
+            return $this->success([
+                'prompt' => [
+                    'id' => $result['prompt']['id'],
+                    'content' => $result['prompt']['content'],
+                    'input_tokens' => $result['prompt']['input_tokens'],
+                    'created_at' => $result['prompt']['created_at']
+                ],
+                'response' => [
+                    'id' => $result['response']['id'],
+                    'content' => $result['response']['content'],
+                    'output_tokens' => $result['response']['output_tokens'],
+                    'created_at' => $result['response']['created_at']
+                ],
+                'metadata' => $result['metadata']
+            ], "Chat completed successfully.");
+        } catch (Exception $e) {
+            Logger::error("Service call failed", [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            return $this->error($e->getMessage(), 500, 'CHAT_FAILED');
+        }
     }
 
     /**

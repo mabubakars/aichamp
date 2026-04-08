@@ -50,7 +50,7 @@ function seedDefaultAIModels($database) {
         // Seed default models
         $models = [
             [
-                'name' => 'deepseek-r1:7b',
+                'display_name' => 'deepseek-r1:7b',
                 'model_name' => 'deepseek-r1:7b',
                 'provider' => 'ollama',
                 'description' => 'DeepSeek R1 7B model',
@@ -58,7 +58,7 @@ function seedDefaultAIModels($database) {
                 'config' => '{"api_endpoint": "http://localhost:11434/api/chat", "max_tokens": 4096}'
             ],
             [
-                'name' => 'llama3.1:8b',
+                'display_name' => 'llama3.1:8b',
                 'model_name' => 'llama3.1:8b',
                 'provider' => 'ollama',
                 'description' => 'Llama 3.1 8B model',
